@@ -1,10 +1,10 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { AIAnalysisResult, DashboardData, Source } from "../types";
+import { AIAnalysisResult, DashboardData, Source, StockPreview } from "../types";
 
 const apiKey = process.env.API_KEY || '';
 const ai = new GoogleGenAI({ apiKey });
 
-// Schema for structured output
+// Schema for structured output (Analysis)
 const analysisSchema = {
   type: Type.OBJECT,
   properties: {
@@ -60,6 +60,7 @@ const analysisSchema = {
   required: ["symbol", "name", "currentPrice", "change", "changePercent", "overallScore", "trend", "fundamental", "technical", "chips", "tradeSetup", "riskAnalysis"]
 };
 
+// Deep Analysis uses PRO model for reasoning
 export const analyzeStock = async (query: string): Promise<AIAnalysisResult> => {
   try {
     const prompt = `
@@ -81,7 +82,7 @@ export const analyzeStock = async (query: string): Promise<AIAnalysisResult> => 
       - JSON object matching the schema.
     `;
 
-    // Using gemini-3-pro-preview with Google Search tool
+    // Using gemini-3-pro-preview for deep analysis (slower but smarter)
     const response = await ai.models.generateContent({
       model: "gemini-3-pro-preview",
       contents: prompt,
@@ -100,7 +101,6 @@ export const analyzeStock = async (query: string): Promise<AIAnalysisResult> => 
     const data = JSON.parse(response.text) as AIAnalysisResult;
     data.timestamp = new Date().toLocaleString('zh-TW');
 
-    // Extract citations
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
     if (chunks) {
         data.sources = chunks
@@ -116,93 +116,96 @@ export const analyzeStock = async (query: string): Promise<AIAnalysisResult> => 
   }
 };
 
+// Dashboard uses FLASH model + Parallel Execution for speed
 export const getDashboardData = async (): Promise<DashboardData> => {
-    const prompt = `
-        Act as a Taiwan Stock Market Expert.
-        
-        TASK 1: STANDARD LISTS
-        Use Google Search to find the **LATEST** market rankings for Taiwan Stocks (TWSE/TPEX).
-        Retrieve 3-5 distinct stocks for each:
-        1. "trending": Search for "Yahoo股市 熱門成交排行".
-        2. "fundamental": Search for "CMoney 績優股" or "台股 營收成長排行".
-        3. "technical": Search for "Yahoo股市 強勢漲幅排行".
-        4. "chips": Search for "CMoney 法人買超排行榜".
-        5. "leading": Search for "台股 權值股排名".
+    
+    // 1. Static Data (Instant, no API cost/time)
+    const staticLeading: StockPreview[] = [
+        { symbol: '2330', name: '台積電', price: '1080', changePercent: 0, reason: '權值龍頭' },
+        { symbol: '2317', name: '鴻海', price: '210', changePercent: 0, reason: '權值股' },
+        { symbol: '2454', name: '聯發科', price: '1250', changePercent: 0, reason: 'IC設計龍頭' },
+        { symbol: '2308', name: '台達電', price: '380', changePercent: 0, reason: '權值股' },
+        { symbol: '2881', name: '富邦金', price: '90', changePercent: 0, reason: '金融權值' }
+    ];
 
-        TASK 2: DYNAMIC MARKET STRATEGIES (Hot Topics)
-        Search for "台股 熱門族群", "Yahoo股市 概念股排行", "CMoney 選股網 熱門選股" to identify **3 CURRENTLY TRENDING THEMES** (e.g., "AI Cooling", "Earthquake Reconstruction", "Military Industry", "High Dividend ETF").
-        Create 3 distinct strategy groups based on what you find.
+    // 2. Define Prompts for Parallel Execution
+    
+    // Request A: Standard Lists (Yahoo/CMoney)
+    const listsPrompt = `
+        Act as a TWSE Expert. Use Google Search to fetch data from:
+        - Yahoo Rank: https://tw.stock.yahoo.com/rank/
+        - CMoney Institutional: https://www.cmoney.tw/finance/f00062.aspx
         
-        REQUIREMENTS:
-        - **USE REAL DATA** from search results.
-        - Output strictly in JSON format matching the schema.
-        - Text must be Traditional Chinese (繁體中文).
+        TASK: Return 4 arrays of stocks (3-5 items each).
+        1. "trending": Yahoo Popular Volume (熱門成交).
+        2. "technical": Yahoo Top Gainers (強勢漲幅).
+        3. "chips": CMoney Institutional Buying (法人買超).
+        4. "fundamental": High Revenue Growth (營收成長).
+
+        LANGUAGE REQUIREMENT:
+        - **ALL TEXT OUTPUT MUST BE IN TRADITIONAL CHINESE (繁體中文).**
+        - Do not use English for names or reasons.
+
+        Output JSON: { "trending": [...], "technical": [...], "chips": [...], "fundamental": [...] }
+        Each item example: { "symbol": "2330", "name": "台積電", "price": "1000", "changePercent": 1.5, "reason": "外資連買三日 (繁體中文)" }
+    `;
+
+    // Request B: Dynamic Strategies (Hot Topics)
+    const strategiesPrompt = `
+        Act as a TWSE Expert. Search for "台股 熱門族群", "主流 概念股".
+        Identify 3 CURRENT HOT THEMES (e.g. CoWoS, Robot, Energy, Military).
         
-        OUTPUT SCHEMA:
-        {
-          "trending": [ { "symbol": "2330", "name": "台積電", "price": "1000", "changePercent": 1.2, "reason": "..." }, ... ],
-          "fundamental": [ ... ],
-          "technical": [ ... ],
-          "chips": [ ... ],
-          "leading": [ ... ],
+        LANGUAGE REQUIREMENT:
+        - **ALL TEXT OUTPUT MUST BE IN TRADITIONAL CHINESE (繁體中文).**
+        
+        Output JSON: { 
           "strategies": [
-             {
-               "id": "strategy_1",
-               "name": "Strategy Name (e.g. 散熱模組)",
-               "description": "Short description of why this is hot (e.g. NVDA effect)",
-               "source": "Yahoo/CMoney",
-               "stocks": [ ... 3-5 stocks ... ]
-             },
-             { "id": "strategy_2", ... },
-             { "id": "strategy_3", ... }
+            { 
+              "id": "s1", "name": "題材名稱(繁體中文)", "description": "熱門原因(繁體中文)", "source": "新聞來源",
+              "stocks": [{ "symbol": "...", "name": "...", "price": "...", "changePercent": 0, "reason": "..." }] 
+            } 
           ]
         }
     `;
-    
-    try {
-        const response = await ai.models.generateContent({
-            model: "gemini-3-pro-preview", 
-            contents: prompt,
-            config: {
-                tools: [{googleSearch: {}}],
-                responseMimeType: "application/json",
-            }
-        });
 
-        const text = response.text;
-        if (!text) throw new Error("Empty response");
-        
-        const parsed = JSON.parse(text);
-        
+    try {
+        // Execute both requests in parallel using FLASH model for speed
+        const [listsResponse, strategiesResponse] = await Promise.all([
+            ai.models.generateContent({
+                model: "gemini-3-flash-preview", // Flash is 5x faster
+                contents: listsPrompt,
+                config: { tools: [{googleSearch: {}}], responseMimeType: "application/json" }
+            }),
+            ai.models.generateContent({
+                model: "gemini-3-flash-preview", // Flash is 5x faster
+                contents: strategiesPrompt,
+                config: { tools: [{googleSearch: {}}], responseMimeType: "application/json" }
+            })
+        ]);
+
+        const listsData = listsResponse.text ? JSON.parse(listsResponse.text) : {};
+        const strategiesData = strategiesResponse.text ? JSON.parse(strategiesResponse.text) : {};
+
         const safeList = (list: any[]) => Array.isArray(list) ? list : [];
 
         return {
-            trending: safeList(parsed.trending),
-            fundamental: safeList(parsed.fundamental),
-            technical: safeList(parsed.technical),
-            chips: safeList(parsed.chips),
-            leading: safeList(parsed.leading),
-            strategies: safeList(parsed.strategies) // Dynamic strategies
+            trending: safeList(listsData.trending),
+            fundamental: safeList(listsData.fundamental),
+            technical: safeList(listsData.technical),
+            chips: safeList(listsData.chips),
+            leading: staticLeading, // Instant return
+            strategies: safeList(strategiesData.strategies)
         };
+
     } catch (e) {
-        console.error("Dashboard real-time fetch failed", e);
-        
-        // Fallback
+        console.error("Dashboard fetch failed", e);
         return {
-            trending: [{ symbol: '2330', name: '台積電', price: '1080', changePercent: 1.5, reason: '系統繁忙，顯示預設值' }],
+            trending: [{ symbol: '2330', name: '台積電', price: '-', changePercent: 0, reason: '載入失敗' }],
             fundamental: [],
             technical: [],
             chips: [],
-            leading: [],
-            strategies: [
-                {
-                    id: 'fallback_1',
-                    name: 'AI 伺服器 (預設)',
-                    description: '資料載入失敗，顯示預設 AI 概念股。',
-                    source: 'System',
-                    stocks: [{ symbol: '3231', name: '緯創', price: '110', changePercent: 0.5, reason: 'AI' }]
-                }
-            ]
+            leading: staticLeading,
+            strategies: []
         };
     }
 }

@@ -33,7 +33,7 @@ const StockDetail: React.FC<StockDetailProps> = ({ data, onBack }) => {
         onClick={onBack}
         className="mb-6 text-sm text-gray-400 hover:text-white flex items-center gap-2 transition-colors"
       >
-        ← 返回搜尋 / Back to Search
+        ← 返回搜尋
       </button>
 
       {/* Header Section */}
@@ -46,13 +46,13 @@ const StockDetail: React.FC<StockDetailProps> = ({ data, onBack }) => {
             <div className="flex items-center gap-3">
               <h1 className="text-4xl font-black text-white tracking-tight">{data.symbol}</h1>
               <span className={`px-3 py-1 rounded-full text-xs font-bold border ${borderColor} ${themeColor} bg-opacity-10`}>
-                {data.trend}
+                {data.trend === 'BULLISH' ? '看多' : data.trend === 'BEARISH' ? '看空' : '盤整'}
               </span>
             </div>
             <h2 className="text-xl text-gray-300 mt-1">{data.name}</h2>
             <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
                 <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                Analysis Time: {data.timestamp}
+                分析時間: {data.timestamp}
             </p>
           </div>
 
@@ -96,7 +96,7 @@ const StockDetail: React.FC<StockDetailProps> = ({ data, onBack }) => {
             <div className="bg-slate-800/50 p-4 rounded-xl">
               <span className="text-xs text-gray-400 block mb-1">建議動作</span>
               <span className={`text-xl font-bold ${data.tradeSetup?.action === 'BUY' ? 'text-neon-green' : data.tradeSetup?.action === 'SELL' ? 'text-neon-red' : 'text-yellow-400'}`}>
-                {data.tradeSetup?.action || 'HOLD'}
+                {data.tradeSetup?.action === 'BUY' ? '買進' : data.tradeSetup?.action === 'SELL' ? '賣出' : '觀望'}
               </span>
             </div>
             <div className="bg-slate-800/50 p-4 rounded-xl">

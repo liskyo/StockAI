@@ -28,7 +28,7 @@ function App() {
       setAnalysisData(data);
       setStatus(AnalysisStatus.SUCCESS);
     } catch (err) {
-      setErrorMsg("AI Analysis failed. Please try again or check your API key.");
+      setErrorMsg("AI 分析失敗，請稍後重試或檢查您的網路連線。");
       setStatus(AnalysisStatus.ERROR);
     }
   };
@@ -61,7 +61,7 @@ function App() {
                 <input
                   type="text"
                   className="block w-full pl-10 pr-3 py-2 border border-slate-700 rounded-full leading-5 bg-slate-800/50 text-gray-300 placeholder-gray-500 focus:outline-none focus:bg-slate-800 focus:border-neon-blue focus:ring-1 focus:ring-neon-blue sm:text-sm transition-all"
-                  placeholder="輸入股票代號或名稱 (e.g., 2330, NVDA)..."
+                  placeholder="輸入股票代號或名稱 (e.g., 2330, 緯創)..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                 />
@@ -70,7 +70,7 @@ function App() {
 
             <div className="hidden md:flex items-center gap-4">
                <span className="text-xs font-mono text-neon-green px-2 py-1 bg-neon-green/10 rounded border border-neon-green/20">
-                  SYSTEM ONLINE
+                  系統連線正常
                </span>
             </div>
           </div>
@@ -93,8 +93,8 @@ function App() {
                     <Cpu className="w-8 h-8 text-white animate-pulse" />
                 </div>
             </div>
-            <h2 className="mt-8 text-2xl font-bold text-white animate-pulse">AI Analysing Market Data...</h2>
-            <p className="text-gray-400 mt-2">Computing 4-Pillar Strategy (Fundamental, Technical, Chips, Financial)</p>
+            <h2 className="mt-8 text-2xl font-bold text-white animate-pulse">AI 正在分析市場數據...</h2>
+            <p className="text-gray-400 mt-2">正在計算四大面向策略 (基本/技術/籌碼/財務)...</p>
             <div className="mt-6 flex gap-2">
                 <span className="w-2 h-2 bg-neon-blue rounded-full animate-bounce" style={{ animationDelay: '0s'}}></span>
                 <span className="w-2 h-2 bg-neon-blue rounded-full animate-bounce" style={{ animationDelay: '0.2s'}}></span>
@@ -108,13 +108,13 @@ function App() {
             <div className="bg-red-500/10 p-6 rounded-full mb-4">
                 <Search className="w-12 h-12 text-red-500" />
             </div>
-            <h3 className="text-xl font-bold text-white mb-2">Analysis Failed</h3>
+            <h3 className="text-xl font-bold text-white mb-2">分析失敗</h3>
             <p className="text-gray-400 max-w-md mb-6">{errorMsg}</p>
             <button 
                 onClick={handleBack}
                 className="px-6 py-2 bg-slate-700 hover:bg-slate-600 rounded-lg text-white transition-colors"
             >
-                Return Home
+                返回首頁
             </button>
           </div>
         )}

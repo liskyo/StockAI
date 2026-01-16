@@ -27,7 +27,7 @@ export interface DashboardData {
   fundamental: StockPreview[]; // CMoney 績優
   technical: StockPreview[];   // Yahoo 強勢
   chips: StockPreview[];       // CMoney 法人
-  leading: StockPreview[];     // 權值
+  dividend: StockPreview[];    // Yahoo 高殖利率 (Replaced Leading)
   strategies: StrategyGroup[]; // Dynamic Strategies from current market
 }
 
@@ -68,6 +68,10 @@ export interface AIAnalysisResult {
   fundamental: AnalysisSection;
   technical: AnalysisSection;
   chips: AnalysisSection; // Institutional holdings/flow
+  
+  // New Dimensions
+  marketSentiment: AnalysisSection; // News, Social Media, Fear/Greed
+  retail: AnalysisSection;          // Financing, Short Selling, Retail participation
   
   tradeSetup: TradeSetup;
   riskAnalysis: string;

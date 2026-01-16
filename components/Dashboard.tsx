@@ -13,7 +13,8 @@ import {
   ListFilter,
   Globe,
   Lightbulb,
-  Sparkles
+  Sparkles,
+  Percent
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -21,7 +22,7 @@ interface DashboardProps {
 }
 
 // Combine standard tabs with string for dynamic strategy IDs
-type TabType = 'trending' | 'fundamental' | 'technical' | 'chips' | 'leading' | string;
+type TabType = 'trending' | 'fundamental' | 'technical' | 'chips' | 'dividend' | string;
 
 const Dashboard: React.FC<DashboardProps> = ({ onSelectStock }) => {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -55,7 +56,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectStock }) => {
     { id: 'fundamental', label: '績優 (CMoney)', icon: <DollarSign className="w-4 h-4" />, color: 'text-emerald-500' },
     { id: 'technical', label: '強勢 (Yahoo)', icon: <BarChart2 className="w-4 h-4" />, color: 'text-blue-500' },
     { id: 'chips', label: '法人 (CMoney)', icon: <Users className="w-4 h-4" />, color: 'text-purple-500' },
-    { id: 'leading', label: '權值', icon: <Activity className="w-4 h-4" />, color: 'text-yellow-500' },
+    { id: 'dividend', label: '高殖利 (Yahoo)', icon: <Percent className="w-4 h-4" />, color: 'text-yellow-500' },
   ];
 
   // Helper to determine what list to show
@@ -67,7 +68,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectStock }) => {
       if (activeTab === 'fundamental') return data.fundamental;
       if (activeTab === 'technical') return data.technical;
       if (activeTab === 'chips') return data.chips;
-      if (activeTab === 'leading') return data.leading;
+      if (activeTab === 'dividend') return data.dividend;
 
       // Check dynamic strategies
       const strategy = data.strategies.find(s => s.id === activeTab);
@@ -106,12 +107,12 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectStock }) => {
           
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b border-slate-700 pb-4 gap-4">
              {/* Standard Tabs Navigation */}
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-nowrap gap-2 overflow-x-auto w-full md:w-auto scrollbar-hide pb-1">
                 {standardTabs.map((tab) => (
                 <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
-                    className={`flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold transition-all duration-300 ${
+                    className={`flex items-center gap-2 px-3 py-2 rounded-full text-sm font-bold transition-all duration-300 whitespace-nowrap ${
                     activeTab === tab.id 
                         ? 'bg-slate-700 text-white shadow-[0_0_15px_rgba(59,130,246,0.5)] border border-slate-600' 
                         : 'text-gray-400 hover:text-white hover:bg-slate-800'

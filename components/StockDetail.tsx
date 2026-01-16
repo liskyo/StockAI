@@ -9,7 +9,9 @@ import {
   Users,
   ExternalLink,
   ArrowUp,
-  ArrowDown
+  ArrowDown,
+  MessageCircleHeart,
+  User
 } from 'lucide-react';
 
 interface StockDetailProps {
@@ -146,8 +148,8 @@ const StockDetail: React.FC<StockDetailProps> = ({ data, onBack }) => {
         </div>
       </div>
 
-      {/* 3 Pillars Analysis Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+      {/* 3 Pillars Analysis Grid (Row 1) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         
         {/* Fundamental */}
         <div className="glass-panel rounded-2xl p-5 hover:bg-slate-800/80 transition-colors">
@@ -198,7 +200,7 @@ const StockDetail: React.FC<StockDetailProps> = ({ data, onBack }) => {
           <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-3">
              <div className="flex items-center gap-2">
                 <Users className="w-5 h-5 text-purple-400" />
-                <h3 className="font-bold text-white">籌碼面</h3>
+                <h3 className="font-bold text-white">籌碼面 (法人)</h3>
              </div>
              <div className="h-16 w-16">
                  <RadialChart score={data.chips?.score || 0} label="" color="#8b5cf6" />
@@ -214,7 +216,56 @@ const StockDetail: React.FC<StockDetailProps> = ({ data, onBack }) => {
             ))}
           </ul>
         </div>
+      </div>
 
+      {/* New Dimensions: Market Sentiment & Retail Indicators (Row 2) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+        
+        {/* Market Sentiment */}
+        <div className="glass-panel rounded-2xl p-5 hover:bg-slate-800/80 transition-colors border border-slate-700/50">
+          <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-3">
+             <div className="flex items-center gap-2">
+                <MessageCircleHeart className="w-5 h-5 text-pink-400" />
+                <h3 className="font-bold text-white">市場情緒 (新聞/社群)</h3>
+             </div>
+             <div className="h-16 w-16">
+                 {/* Pink/Red for sentiment */}
+                 <RadialChart score={data.marketSentiment?.score || 0} label="" color="#f472b6" />
+             </div>
+          </div>
+          <p className="text-sm text-white mb-3 font-medium">{data.marketSentiment?.summary}</p>
+          <ul className="space-y-2">
+            {(data.marketSentiment?.details || []).map((detail, i) => (
+                <li key={i} className="text-xs text-gray-400 flex items-start">
+                    <span className="mr-2 text-pink-500">•</span>
+                    {detail}
+                </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* Retail Indicators */}
+        <div className="glass-panel rounded-2xl p-5 hover:bg-slate-800/80 transition-colors border border-slate-700/50">
+          <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-3">
+             <div className="flex items-center gap-2">
+                <User className="w-5 h-5 text-orange-400" />
+                <h3 className="font-bold text-white">散戶指標 (融資券)</h3>
+             </div>
+             <div className="h-16 w-16">
+                 {/* Orange for retail/caution */}
+                 <RadialChart score={data.retail?.score || 0} label="" color="#fb923c" />
+             </div>
+          </div>
+          <p className="text-sm text-white mb-3 font-medium">{data.retail?.summary}</p>
+           <ul className="space-y-2">
+            {(data.retail?.details || []).map((detail, i) => (
+                <li key={i} className="text-xs text-gray-400 flex items-start">
+                    <span className="mr-2 text-orange-500">•</span>
+                    {detail}
+                </li>
+            ))}
+          </ul>
+        </div>
       </div>
 
       {data.sources && data.sources.length > 0 && (

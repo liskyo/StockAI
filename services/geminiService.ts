@@ -68,8 +68,8 @@ export const analyzeStock = async (query: string): Promise<AIAnalysisResult> => 
       
       TASK:
       1. USE GOOGLE SEARCH to find the LATEST REAL-TIME PRICE, Change, and Change% for this stock.
-      2. Verify the latest institutional buying/selling status (Foreign/Investment Trust).
-      3. Analyze technicals based on the *found* close price.
+      2. Verify the latest institutional buying/selling status (Foreign/Investment Trust) similar to data found on CMoney.
+      3. Analyze technicals based on the *found* close price similar to Yahoo Finance charts.
       
       REQUIREMENTS:
       - Currency: TWD.
@@ -117,67 +117,92 @@ export const analyzeStock = async (query: string): Promise<AIAnalysisResult> => 
 };
 
 export const getDashboardData = async (): Promise<DashboardData> => {
-    // OPTIMIZATION: Removed googleSearch tool to prevent 5+ minute timeouts.
-    // Relying on AI's internal knowledge base for instant list generation.
     const prompt = `
         Act as a Taiwan Stock Market Expert.
         
-        TASK:
-        Generate 5 distinct lists of Taiwan stocks (5 stocks each) representing the typical market leaders and trending sectors.
-        
-        **CRITICAL PERFORMANCE REQUIREMENT**: 
-        - DO NOT perform external searches. 
-        - Use your internal knowledge to select representative stocks.
-        - **ESTIMATE** the prices and changes based on recent market conditions you are aware of.
-        - Ensure the selection includes a mix of Tech, Finance, and Traditional industries appropriate for each category.
-        
-        Lists:
-        1. "trending": High Volume / Popular (e.g., TSMC, AI Concepts).
-        2. "fundamental": Blue Chips / High Yield.
-        3. "technical": Volatile / Momentum Stocks.
-        4. "chips": Foreign/Inst. Favorites.
-        5. "leading": Market Cap Leaders.
+        TASK 1: STANDARD LISTS
+        Use Google Search to find the **LATEST** market rankings for Taiwan Stocks (TWSE/TPEX).
+        Retrieve 3-5 distinct stocks for each:
+        1. "trending": Search for "Yahoo股市 熱門成交排行".
+        2. "fundamental": Search for "CMoney 績優股" or "台股 營收成長排行".
+        3. "technical": Search for "Yahoo股市 強勢漲幅排行".
+        4. "chips": Search for "CMoney 法人買超排行榜".
+        5. "leading": Search for "台股 權值股排名".
 
-        Output strictly in JSON format.
-        Each item must have: 
-        - symbol (e.g., "2330")
-        - name (Traditional Chinese 繁體中文)
-        - price (string, e.g., "1080")
-        - changePercent (number, e.g., 2.5)
-        - reason (Brief reason in Traditional Chinese 繁體中文)
+        TASK 2: DYNAMIC MARKET STRATEGIES (Hot Topics)
+        Search for "台股 熱門族群", "Yahoo股市 概念股排行", "CMoney 選股網 熱門選股" to identify **3 CURRENTLY TRENDING THEMES** (e.g., "AI Cooling", "Earthquake Reconstruction", "Military Industry", "High Dividend ETF").
+        Create 3 distinct strategy groups based on what you find.
+        
+        REQUIREMENTS:
+        - **USE REAL DATA** from search results.
+        - Output strictly in JSON format matching the schema.
+        - Text must be Traditional Chinese (繁體中文).
+        
+        OUTPUT SCHEMA:
+        {
+          "trending": [ { "symbol": "2330", "name": "台積電", "price": "1000", "changePercent": 1.2, "reason": "..." }, ... ],
+          "fundamental": [ ... ],
+          "technical": [ ... ],
+          "chips": [ ... ],
+          "leading": [ ... ],
+          "strategies": [
+             {
+               "id": "strategy_1",
+               "name": "Strategy Name (e.g. 散熱模組)",
+               "description": "Short description of why this is hot (e.g. NVDA effect)",
+               "source": "Yahoo/CMoney",
+               "stocks": [ ... 3-5 stocks ... ]
+             },
+             { "id": "strategy_2", ... },
+             { "id": "strategy_3", ... }
+          ]
+        }
     `;
     
-    const response = await ai.models.generateContent({
-      model: "gemini-3-flash-preview", 
-      contents: prompt,
-      config: {
-        // tools: [{googleSearch: {}}], // REMOVED: Causing timeout.
-        responseMimeType: "application/json",
-      }
-    });
-    
-    // Default fallback
-    const mockData: DashboardData = {
-        trending: [
-            { symbol: '2330', name: '台積電', price: 'Fetching...', changePercent: 0, reason: '系統忙碌中，請稍後再試' },
-        ],
-        fundamental: [],
-        technical: [],
-        chips: [],
-        leading: []
-    };
-
     try {
+        const response = await ai.models.generateContent({
+            model: "gemini-3-pro-preview", 
+            contents: prompt,
+            config: {
+                tools: [{googleSearch: {}}],
+                responseMimeType: "application/json",
+            }
+        });
+
         const text = response.text;
-        if (!text) return mockData;
+        if (!text) throw new Error("Empty response");
+        
         const parsed = JSON.parse(text);
         
-        if (parsed.trending && Array.isArray(parsed.trending)) {
-            return parsed as DashboardData;
-        }
-        return mockData;
+        const safeList = (list: any[]) => Array.isArray(list) ? list : [];
+
+        return {
+            trending: safeList(parsed.trending),
+            fundamental: safeList(parsed.fundamental),
+            technical: safeList(parsed.technical),
+            chips: safeList(parsed.chips),
+            leading: safeList(parsed.leading),
+            strategies: safeList(parsed.strategies) // Dynamic strategies
+        };
     } catch (e) {
-        console.error("Dashboard data fetch failed", e);
-        return mockData;
+        console.error("Dashboard real-time fetch failed", e);
+        
+        // Fallback
+        return {
+            trending: [{ symbol: '2330', name: '台積電', price: '1080', changePercent: 1.5, reason: '系統繁忙，顯示預設值' }],
+            fundamental: [],
+            technical: [],
+            chips: [],
+            leading: [],
+            strategies: [
+                {
+                    id: 'fallback_1',
+                    name: 'AI 伺服器 (預設)',
+                    description: '資料載入失敗，顯示預設 AI 概念股。',
+                    source: 'System',
+                    stocks: [{ symbol: '3231', name: '緯創', price: '110', changePercent: 0.5, reason: 'AI' }]
+                }
+            ]
+        };
     }
 }

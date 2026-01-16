@@ -14,12 +14,21 @@ export interface StockPreview {
   reason: string; // Why it is in this list
 }
 
+export interface StrategyGroup {
+  id: string;          // e.g., "strategy_1"
+  name: string;        // e.g., "重電綠能", "CoWoS概念"
+  description: string; // e.g., "受惠台電強韌電網計畫..."
+  source: string;      // e.g., "Yahoo 類股"
+  stocks: StockPreview[];
+}
+
 export interface DashboardData {
-  trending: StockPreview[];
-  fundamental: StockPreview[];
-  technical: StockPreview[];
-  chips: StockPreview[];
-  leading: StockPreview[];
+  trending: StockPreview[];    // Yahoo 熱門
+  fundamental: StockPreview[]; // CMoney 績優
+  technical: StockPreview[];   // Yahoo 強勢
+  chips: StockPreview[];       // CMoney 法人
+  leading: StockPreview[];     // 權值
+  strategies: StrategyGroup[]; // Dynamic Strategies from current market
 }
 
 export interface AnalysisSection {

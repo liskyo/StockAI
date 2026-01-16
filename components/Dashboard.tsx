@@ -1,23 +1,27 @@
 import React, { useEffect, useState } from 'react';
 import { getDashboardData } from '../services/geminiService';
-import { DashboardData, StockPreview } from '../types';
+import { DashboardData, StockPreview, StrategyGroup } from '../types';
 import { 
   TrendingUp, 
   Flame, 
-  Zap, 
   Activity, 
   DollarSign, 
   BarChart2, 
   Users,
   Search,
-  ArrowRight
+  ArrowRight,
+  ListFilter,
+  Globe,
+  Lightbulb,
+  Sparkles
 } from 'lucide-react';
 
 interface DashboardProps {
   onSelectStock: (symbol: string) => void;
 }
 
-type TabType = 'trending' | 'fundamental' | 'technical' | 'chips' | 'leading';
+// Combine standard tabs with string for dynamic strategy IDs
+type TabType = 'trending' | 'fundamental' | 'technical' | 'chips' | 'leading' | string;
 
 const Dashboard: React.FC<DashboardProps> = ({ onSelectStock }) => {
   const [data, setData] = useState<DashboardData | null>(null);
@@ -46,15 +50,42 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectStock }) => {
     }
   };
 
-  const tabs: { id: TabType; label: string; icon: React.ReactNode; color: string }[] = [
-    { id: 'trending', label: '熱門焦點', icon: <Flame className="w-4 h-4" />, color: 'text-orange-500' },
-    { id: 'fundamental', label: '基本面優選', icon: <DollarSign className="w-4 h-4" />, color: 'text-emerald-500' },
-    { id: 'technical', label: '技術面強勢', icon: <BarChart2 className="w-4 h-4" />, color: 'text-blue-500' },
-    { id: 'chips', label: '籌碼集中', icon: <Users className="w-4 h-4" />, color: 'text-purple-500' },
-    { id: 'leading', label: '領先指標', icon: <Activity className="w-4 h-4" />, color: 'text-yellow-500' },
+  const standardTabs: { id: TabType; label: string; icon: React.ReactNode; color: string }[] = [
+    { id: 'trending', label: '熱門 (Yahoo)', icon: <Flame className="w-4 h-4" />, color: 'text-orange-500' },
+    { id: 'fundamental', label: '績優 (CMoney)', icon: <DollarSign className="w-4 h-4" />, color: 'text-emerald-500' },
+    { id: 'technical', label: '強勢 (Yahoo)', icon: <BarChart2 className="w-4 h-4" />, color: 'text-blue-500' },
+    { id: 'chips', label: '法人 (CMoney)', icon: <Users className="w-4 h-4" />, color: 'text-purple-500' },
+    { id: 'leading', label: '權值', icon: <Activity className="w-4 h-4" />, color: 'text-yellow-500' },
   ];
 
-  const currentList = data ? data[activeTab] : [];
+  // Helper to determine what list to show
+  const getCurrentList = (): StockPreview[] => {
+      if (!data) return [];
+      
+      // Check standard tabs
+      if (activeTab === 'trending') return data.trending;
+      if (activeTab === 'fundamental') return data.fundamental;
+      if (activeTab === 'technical') return data.technical;
+      if (activeTab === 'chips') return data.chips;
+      if (activeTab === 'leading') return data.leading;
+
+      // Check dynamic strategies
+      const strategy = data.strategies.find(s => s.id === activeTab);
+      return strategy ? strategy.stocks : [];
+  };
+
+  const getTabTitle = (id: TabType) => {
+    const t = standardTabs.find(x => x.id === id);
+    if (t) return t.label;
+    
+    // Check strategies
+    const s = data?.strategies.find(x => x.id === id);
+    if (s) return `${s.name} (熱門題材)`;
+    
+    return '列表';
+  };
+
+  const currentList = getCurrentList();
 
   return (
     <div className="animate-fade-in">
@@ -64,19 +95,19 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectStock }) => {
             TW STOCK WINNER
          </h1>
          <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-            台股 AI 智能決策系統：鎖定台股精選標的，從基本面到籌碼面，全方位解析真實數據。
+            台股 AI 智能決策系統：透過 Google Search 即時同步 Yahoo 與 CMoney 排行榜資訊。
          </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
         
         {/* Main Ranking Panel (Left 2/3) */}
-        <div className="lg:col-span-2 glass-panel rounded-2xl p-6 min-h-[500px]">
+        <div className="lg:col-span-2 glass-panel rounded-2xl p-6 min-h-[600px] flex flex-col">
           
-          <div className="flex justify-between items-center mb-6 border-b border-slate-700 pb-4">
-             {/* Tabs Navigation */}
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 border-b border-slate-700 pb-4 gap-4">
+             {/* Standard Tabs Navigation */}
             <div className="flex flex-wrap gap-2">
-                {tabs.map((tab) => (
+                {standardTabs.map((tab) => (
                 <button
                     key={tab.id}
                     onClick={() => setActiveTab(tab.id)}
@@ -94,95 +125,130 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectStock }) => {
           </div>
           
           {/* List Content */}
-          {loading ? (
-             <div className="space-y-4">
-               {[1,2,3,4,5].map(i => <div key={i} className="h-20 bg-slate-800/50 animate-pulse rounded-xl"></div>)}
-             </div>
-          ) : (
-            <div className="space-y-3">
-              <div className="flex justify-end mb-2">
-                 <span className="text-[10px] text-gray-500 bg-slate-800 px-2 py-1 rounded border border-slate-700">
-                    * 列表報價為 AI 估算參考值，即時報價請點擊詳情
+          <div className="flex-1">
+             <div className="flex justify-between items-center mb-4">
+                <h3 className="text-xl font-bold text-white flex items-center gap-2">
+                    <ListFilter className="w-5 h-5 text-neon-blue" />
+                    {getTabTitle(activeTab)}
+                </h3>
+                <span className="text-[10px] text-gray-400 bg-slate-900 px-2 py-1 rounded border border-slate-700 flex items-center gap-1">
+                    <Globe size={10} className="text-neon-green"/>
+                    AI 即時聯網搜尋中
                  </span>
-              </div>
-              {currentList?.length === 0 && <div className="text-gray-500 text-center py-10">暫無數據</div>}
-              {currentList?.map((stock, index) => (
-                <div 
-                  key={`${stock.symbol}-${index}`}
-                  onClick={() => onSelectStock(stock.symbol)}
-                  className="flex items-center justify-between p-4 bg-slate-800/30 hover:bg-slate-700/80 rounded-xl cursor-pointer transition-all border border-transparent hover:border-neon-blue group relative overflow-hidden"
-                >
-                  <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-transparent via-slate-600 to-transparent group-hover:via-neon-blue transition-all"></div>
-                  
-                  <div className="flex items-center gap-4">
-                    <div className="flex flex-col items-center justify-center w-8 h-8 rounded-full bg-slate-900 text-xs font-mono text-gray-500 border border-slate-700">
-                        {index + 1}
-                    </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                          <span className="text-white font-bold text-lg group-hover:text-neon-blue transition-colors">{stock.symbol}</span>
-                          <span className="text-gray-400 text-sm">{stock.name}</span>
-                      </div>
-                      <div className="text-xs text-gray-400 mt-1 flex items-center gap-1">
-                          <span className="w-1.5 h-1.5 rounded-full bg-gray-500 group-hover:bg-neon-blue"></span>
-                          {stock.reason}
-                      </div>
-                    </div>
-                  </div>
+             </div>
 
-                  <div className="text-right pl-4">
-                    <div className="text-white font-mono text-lg">{stock.price}</div>
-                    <div className={`text-sm font-bold ${stock.changePercent >= 0 ? 'text-neon-green' : 'text-neon-red'}`}>
-                      {stock.changePercent > 0 ? '+' : ''}{stock.changePercent}%
-                    </div>
+            {loading ? (
+                <div className="space-y-4">
+                  <div className="flex items-center justify-center py-10 text-neon-blue animate-pulse">
+                     正在連結 Yahoo/CMoney 數據庫分析熱門題材...
                   </div>
+                  {[1,2,3,4,5].map(i => <div key={i} className="h-20 bg-slate-800/50 animate-pulse rounded-xl"></div>)}
                 </div>
-              ))}
-            </div>
-          )}
+            ) : (
+                <div className="space-y-3">
+                {currentList?.length === 0 && (
+                    <div className="text-gray-500 text-center py-10 border border-dashed border-slate-700 rounded-xl">
+                        AI 暫時無法從來源獲取此列表，請稍後再試。
+                    </div>
+                )}
+                {currentList?.map((stock, index) => (
+                    <div 
+                    key={`${stock.symbol}-${index}`}
+                    onClick={() => onSelectStock(stock.symbol)}
+                    className="flex items-center justify-between p-4 bg-slate-800/30 hover:bg-slate-700/80 rounded-xl cursor-pointer transition-all border border-transparent hover:border-neon-blue group relative overflow-hidden"
+                    >
+                    <div className="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-transparent via-slate-600 to-transparent group-hover:via-neon-blue transition-all"></div>
+                    
+                    <div className="flex items-center gap-4">
+                        <div className="flex flex-col items-center justify-center w-8 h-8 rounded-full bg-slate-900 text-xs font-mono text-gray-500 border border-slate-700">
+                            {index + 1}
+                        </div>
+                        <div>
+                        <div className="flex items-center gap-2">
+                            <span className="text-white font-bold text-lg group-hover:text-neon-blue transition-colors">{stock.symbol}</span>
+                            <span className="text-gray-400 text-sm">{stock.name}</span>
+                        </div>
+                        <div className="text-xs text-gray-400 mt-1 flex items-center gap-1">
+                            <span className="w-1.5 h-1.5 rounded-full bg-gray-500 group-hover:bg-neon-blue"></span>
+                            {stock.reason}
+                        </div>
+                        </div>
+                    </div>
+
+                    <div className="text-right pl-4">
+                        <div className="text-white font-mono text-lg">{stock.price}</div>
+                        <div className={`text-sm font-bold ${stock.changePercent >= 0 ? 'text-neon-green' : 'text-neon-red'}`}>
+                        {stock.changePercent > 0 ? '+' : ''}{Math.abs(stock.changePercent)}%
+                        </div>
+                    </div>
+                    </div>
+                ))}
+                </div>
+            )}
+          </div>
         </div>
 
         {/* Side Strategies (Right 1/3) */}
         <div className="flex flex-col gap-6">
-            <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-1 border border-slate-700">
-                <div className="bg-slate-900/90 rounded-xl p-6 h-full">
-                    <h3 className="text-white font-bold text-lg mb-4 flex items-center gap-2">
+            <div className="bg-gradient-to-br from-slate-900 to-slate-800 rounded-2xl p-1 border border-slate-700 shadow-xl">
+                <div className="bg-slate-900/90 rounded-xl p-6 h-full relative overflow-hidden">
+                    {/* Background decoration */}
+                    <div className="absolute -right-4 -top-4 text-slate-800 opacity-50">
+                        <Sparkles size={80} />
+                    </div>
+
+                    <h3 className="text-white font-bold text-lg mb-4 flex items-center gap-2 relative z-10">
                         <Search className="text-neon-blue" />
-                        快速選股策略
+                        本日動態選股策略
                     </h3>
-                    <div className="space-y-4">
-                        <div 
-                            className="p-4 rounded-lg bg-slate-800 hover:bg-slate-700 cursor-pointer transition-colors group border border-slate-700 hover:border-neon-green"
-                            onClick={() => onSelectStock("2330")}
-                        >
-                            <div className="flex justify-between items-start mb-1">
-                                <span className="text-neon-green font-bold text-sm">權值股領軍</span>
-                                <TrendingUp className="w-4 h-4 text-neon-green" />
-                            </div>
-                            <p className="text-gray-400 text-xs">台積電、鴻海等大型權值股，適合穩健佈局。</p>
-                        </div>
+                    <p className="text-xs text-gray-500 mb-4 relative z-10">
+                        AI 根據 Yahoo/CMoney 即時榜單自動生成的熱門題材。
+                    </p>
+                    
+                    <div className="space-y-3 relative z-10">
+                        {loading ? (
+                            // Skeleton loading for strategies
+                            [1, 2, 3].map(i => (
+                                <div key={i} className="h-20 bg-slate-800 animate-pulse rounded-lg"></div>
+                            ))
+                        ) : (
+                            data?.strategies.map((strategy, idx) => {
+                                const colors = [
+                                    'border-neon-green text-neon-green hover:bg-slate-700',
+                                    'border-yellow-400 text-yellow-400 hover:bg-slate-700',
+                                    'border-neon-purple text-neon-purple hover:bg-slate-700'
+                                ];
+                                const colorClass = colors[idx % colors.length];
+                                const isActive = activeTab === strategy.id;
 
-                        <div 
-                            className="p-4 rounded-lg bg-slate-800 hover:bg-slate-700 cursor-pointer transition-colors group border border-slate-700 hover:border-yellow-400"
-                            onClick={() => onSelectStock("3231")}
-                        >
-                            <div className="flex justify-between items-start mb-1">
-                                <span className="text-yellow-400 font-bold text-sm">AI 伺服器概念</span>
-                                <Zap className="w-4 h-4 text-yellow-400" />
-                            </div>
-                            <p className="text-gray-400 text-xs">緯創、廣達等熱門題材，波動大機會多。</p>
-                        </div>
-
-                        <div 
-                            className="p-4 rounded-lg bg-slate-800 hover:bg-slate-700 cursor-pointer transition-colors group border border-slate-700 hover:border-neon-purple"
-                            onClick={() => onSelectStock("2603")}
-                        >
-                            <div className="flex justify-between items-start mb-1">
-                                <span className="text-neon-purple font-bold text-sm">高殖利率傳產</span>
-                                <Activity className="w-4 h-4 text-neon-purple" />
-                            </div>
-                            <p className="text-gray-400 text-xs">航運、鋼鐵等循環股，留意配息政策。</p>
-                        </div>
+                                return (
+                                    <div 
+                                        key={strategy.id}
+                                        className={`p-4 rounded-lg bg-slate-800 cursor-pointer transition-all duration-300 group border ${isActive ? colorClass.replace('hover:bg-slate-700', 'bg-slate-700') : 'border-slate-700 hover:border-white'}`}
+                                        onClick={() => setActiveTab(strategy.id)}
+                                    >
+                                        <div className="flex justify-between items-start mb-1">
+                                            <span className={`font-bold text-sm ${isActive ? '' : 'text-gray-200 group-hover:text-white'}`}>
+                                                {strategy.name}
+                                            </span>
+                                            <Lightbulb className={`w-4 h-4 ${isActive ? '' : 'text-gray-500'}`} />
+                                        </div>
+                                        <p className="text-gray-400 text-xs mb-1 line-clamp-2">
+                                            {strategy.description}
+                                        </p>
+                                        <div className="text-[10px] text-slate-500 text-right">
+                                            來源: {strategy.source}
+                                        </div>
+                                    </div>
+                                );
+                            })
+                        )}
+                        
+                        {!loading && (!data?.strategies || data.strategies.length === 0) && (
+                             <div className="text-gray-500 text-xs text-center py-4">
+                                無法偵測到熱門題材
+                             </div>
+                        )}
                     </div>
                 </div>
             </div>
@@ -212,7 +278,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectStock }) => {
                 </div>
 
                 <div className="text-xs text-slate-500 border-t border-slate-700 pt-4 mt-2">
-                    支援 上市 / 上櫃 股票
+                    資料來源：Google Search (Yahoo/CMoney)
                 </div>
             </div>
         </div>

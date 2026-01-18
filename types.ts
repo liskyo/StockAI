@@ -23,11 +23,12 @@ export interface StrategyGroup {
 }
 
 export interface DashboardData {
+  leading: StockPreview[];     // NEW: Hardcoded 權值股 (TSMC etc)
   trending: StockPreview[];    // Yahoo 熱門
   fundamental: StockPreview[]; // CMoney 績優
   technical: StockPreview[];   // Yahoo 強勢
   chips: StockPreview[];       // CMoney 法人
-  dividend: StockPreview[];    // Yahoo 高殖利率 (Replaced Leading)
+  dividend: StockPreview[];    // Yahoo 高殖利率
   strategies: StrategyGroup[]; // Dynamic Strategies from current market
 }
 
@@ -56,7 +57,7 @@ export interface AIAnalysisResult {
   symbol: string;
   name: string;
   timestamp: string;
-  
+
   // Real-time market data
   currentPrice: number;
   change: number;
@@ -64,15 +65,15 @@ export interface AIAnalysisResult {
 
   overallScore: number; // 0-100
   trend: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
-  
+
   fundamental: AnalysisSection;
   technical: AnalysisSection;
   chips: AnalysisSection; // Institutional holdings/flow
-  
+
   // New Dimensions
   marketSentiment: AnalysisSection; // News, Social Media, Fear/Greed
   retail: AnalysisSection;          // Financing, Short Selling, Retail participation
-  
+
   tradeSetup: TradeSetup;
   riskAnalysis: string;
   sources?: Source[];

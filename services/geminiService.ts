@@ -195,7 +195,7 @@ export const analyzeStock = async (query: string): Promise<AIAnalysisResult> => 
     - JSON object matching the schema.
     `;
 
-    // Using gemini-2.0-flash-exp for deep analysis (Fast & Smart)
+    // Using gemini-2.5-flash for deep analysis (Requested by User)
     // Retry logic: Try up to validKeys.length times
     const maxRetries = 10; // Cap at 10 to avoid infinite loops if all keys fail
     let lastError;
@@ -215,7 +215,7 @@ export const analyzeStock = async (query: string): Promise<AIAnalysisResult> => 
         const ai = getAI(); // Rotation happens here
 
         const response = await ai.models.generateContent({
-          model: "gemini-2.0-flash-exp",
+          model: "gemini-2.5-flash",
           contents: prompt,
           config: {
             tools: [{ googleSearch: {} }],
@@ -345,8 +345,8 @@ export const getDashboardData = async (): Promise<DashboardData> => {
     };
 
     const [listsData, strategiesData] = await Promise.all([
-      fetchWithRetry("gemini-2.0-flash-exp", listsPrompt),
-      fetchWithRetry("gemini-2.0-flash-exp", strategiesPrompt)
+      fetchWithRetry("gemini-2.5-flash", listsPrompt),
+      fetchWithRetry("gemini-2.5-flash", strategiesPrompt)
     ]);
 
     // Parsing is now done inside fetchWithRetry, so listsData IS the object.

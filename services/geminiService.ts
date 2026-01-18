@@ -159,6 +159,15 @@ const strategiesSchema: Schema = {
   }
 };
 
+// Hardcoded Leading Stocks (權值股) for Instant Loading
+const staticLeadingStocks: StockPreview[] = [
+  { symbol: '2330', name: '台積電', price: '估算中...', changePercent: 0, reason: '半導體龍頭' },
+  { symbol: '2317', name: '鴻海', price: '估算中...', changePercent: 0, reason: '電子代工龍頭' },
+  { symbol: '2454', name: '聯發科', price: '估算中...', changePercent: 0, reason: 'IC設計龍頭' },
+  { symbol: '2308', name: '台達電', price: '估算中...', changePercent: 0, reason: '電源管理龍頭' },
+  { symbol: '2382', name: '廣達', price: '估算中...', changePercent: 0, reason: 'AI伺服器龍頭' }
+];
+
 // Deep Analysis uses PRO model for reasoning
 export const analyzeStock = async (query: string): Promise<AIAnalysisResult> => {
   try {
@@ -329,8 +338,8 @@ export const getDashboardData = async (): Promise<DashboardData> => {
     };
 
     const [listsData, strategiesData] = await Promise.all([
-      fetchWithRetry("gemini-2.5-flash", listsPrompt),
-      fetchWithRetry("gemini-2.5-flash", strategiesPrompt)
+      fetchWithRetry("gemini-2.0-flash-exp", listsPrompt),
+      fetchWithRetry("gemini-2.0-flash-exp", strategiesPrompt)
     ]);
 
     // Parsing is now done inside fetchWithRetry, so listsData IS the object.
@@ -341,6 +350,7 @@ export const getDashboardData = async (): Promise<DashboardData> => {
     const safeList = (list: any[]) => Array.isArray(list) ? list : [];
 
     const result: DashboardData = {
+      leading: staticLeadingStocks,
       trending: safeList(validListsData.trending),
       fundamental: safeList(validListsData.fundamental),
       technical: safeList(validListsData.technical),
@@ -367,6 +377,7 @@ export const getDashboardData = async (): Promise<DashboardData> => {
 
     // Emergency fallback data
     return {
+      leading: staticLeadingStocks,
       trending: [{ symbol: '2330', name: '台積電', price: '1000', changePercent: 0, reason: '系統維護中' }],
       fundamental: [],
       technical: [],

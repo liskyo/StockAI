@@ -251,8 +251,14 @@ export const analyzeStock = async (query: string): Promise<AIAnalysisResult> => 
           const normalizeRisk = (risk: any): string => {
             if (typeof risk === 'string') return risk;
             if (Array.isArray(risk)) return risk.join(' ');
-            if (typeof risk === 'object' && risk?.keyRisks) {
-              return Array.isArray(risk.keyRisks) ? risk.keyRisks.join(' ') : String(risk.keyRisks);
+
+            if (typeof risk === 'object' && risk !== null) {
+              if (risk.keyRisks) {
+                return Array.isArray(risk.keyRisks) ? risk.keyRisks.join(' ') : String(risk.keyRisks);
+              }
+              if (risk.summary) {
+                return String(risk.summary);
+              }
             }
             return JSON.stringify(risk);
           }

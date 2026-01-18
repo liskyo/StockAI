@@ -179,16 +179,14 @@ export const analyzeStock = async (query: string): Promise<AIAnalysisResult> => 
       - JSON object matching the schema.
     `;
 
-    // Using gemini-3-pro-preview for deep analysis (slower but smarter)
-    // Using gemini-3-pro-preview for deep analysis (slower but smarter)
+    // Using gemini-2.5-pro for deep analysis (High Accuracy)
     const response = await getAI().models.generateContent({
-      model: "gemini-3-pro-preview",
+      model: "gemini-2.5-pro",
       contents: prompt,
       config: {
         tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
-        responseSchema: analysisSchema,
-        thinkingConfig: { thinkingBudget: 1024 }
+        responseSchema: analysisSchema
       }
     });
 
@@ -272,7 +270,7 @@ export const getDashboardData = async (): Promise<DashboardData> => {
     // Now using responseSchema to ensure valid JSON structure
     const [listsResponse, strategiesResponse] = await Promise.all([
       getAI().models.generateContent({
-        model: "gemini-3-flash-preview", // Flash is 5x faster
+        model: "gemini-2.5-flash", // Fast
         contents: listsPrompt,
         config: {
           tools: [{ googleSearch: {} }],
@@ -281,7 +279,7 @@ export const getDashboardData = async (): Promise<DashboardData> => {
         }
       }),
       getAI().models.generateContent({
-        model: "gemini-3-flash-preview", // Flash is 5x faster
+        model: "gemini-2.5-flash", // Fast
         contents: strategiesPrompt,
         config: {
           tools: [{ googleSearch: {} }],

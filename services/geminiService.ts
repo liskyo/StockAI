@@ -19,8 +19,8 @@ const getAI = () => {
   if (!apiKey) {
     console.error("[StockAI] CRITICAL ERROR: No Valid API Key found. Env vars might be missing.");
   } else {
-    // Log masked key for verification (first 4 chars)
-    console.log(`[StockAI] Using Key Index ${validKeys.indexOf(apiKey)} (Starts with: ${apiKey.substring(0, 4)}...)`);
+    // Log masked key for verification (first 4 chars and last 4 chars)
+    console.log(`[StockAI] Using Key Index ${validKeys.indexOf(apiKey)} (Starts with: ${apiKey.substring(0, 4)}... Ends with: ...${apiKey.slice(-4)})`);
   }
 
   return new GoogleGenAI({ apiKey });

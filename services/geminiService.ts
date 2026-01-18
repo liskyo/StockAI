@@ -185,7 +185,7 @@ export const analyzeStock = async (query: string): Promise<AIAnalysisResult> => 
       - Currency: TWD.
       - If searching finds multiple prices, use the most recent one.
       - **CRITICAL**: All text output (Name, Summary, Details, Risk Analysis) MUST be in **Traditional Chinese (繁體中文)**.
-      - **FORMAT**: Return ONLY a valid, raw JSON object matching the schema. Do NOT use Markdown code blocks (```json).
+      - **FORMAT**: Return ONLY a valid, raw JSON object matching the schema. Do NOT use Markdown code blocks (\`\`\`json).
 
       SCORING GUIDE:
       - Sentiment Score: > 80(Overheated / Greed), <20 (Panic / Fear).
@@ -203,56 +203,56 @@ export const analyzeStock = async (query: string): Promise<AIAnalysisResult> => 
     // Helper to clean JSON string from markdown
     const parseCleanJSON = (text: string): any => {
       try {
-        const cleanText = text.replace(/```json / g, '').replace(/```/g, '').trim();
-    return JSON.parse(cleanText);
-  } catch (e) {
-    throw new Error("Failed to parse AI JSON response: " + e.message);
-  }
-};
-
-for (let attempt = 0; attempt < maxRetries; attempt++) {
-  try {
-    const ai = getAI(); // Rotation happens here
-
-    const response = await ai.models.generateContent({
-      model: "gemini-2.0-pro-exp-02-05",
-      contents: prompt,
-      config: {
-        tools: [{ googleSearch: {} }],
-        // REMOVE strict JSON enforcement to avoid "Tool use with response mime type unsupported" error
+        const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
+        return JSON.parse(cleanText);
+      } catch (e) {
+        throw new Error("Failed to parse AI JSON response: " + e.message);
       }
-    });
+    };
 
-    if (!response.text) {
-      throw new Error("No response from AI");
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const ai = getAI(); // Rotation happens here
+
+        const response = await ai.models.generateContent({
+          model: "gemini-2.0-pro-exp-02-05",
+          contents: prompt,
+          config: {
+            tools: [{ googleSearch: {} }],
+            // REMOVE strict JSON enforcement to avoid "Tool use with response mime type unsupported" error
+          }
+        });
+
+        if (!response.text) {
+          throw new Error("No response from AI");
+        }
+
+        const data = parseCleanJSON(response.text) as AIAnalysisResult;
+        data.timestamp = new Date().toLocaleString('zh-TW');
+
+        const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+        if (chunks) {
+          data.sources = chunks
+            .map((c: any) => c.web)
+            .filter((w: any) => w !== undefined)
+            .map((w: any) => ({ title: w.title || 'Source', uri: w.uri || '#' }));
+        }
+
+        return data; // Success!
+
+      } catch (error: any) {
+        console.warn(`[StockAI] Attempt ${attempt + 1} failed:`, error.message);
+        lastError = error;
+
+        await new Promise(r => setTimeout(r, 1000));
+      }
     }
 
-    const data = parseCleanJSON(response.text) as AIAnalysisResult;
-    data.timestamp = new Date().toLocaleString('zh-TW');
-
-    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-    if (chunks) {
-      data.sources = chunks
-        .map((c: any) => c.web)
-        .filter((w: any) => w !== undefined)
-        .map((w: any) => ({ title: w.title || 'Source', uri: w.uri || '#' }));
-    }
-
-    return data; // Success!
-
-  } catch (error: any) {
-    console.warn(`[StockAI] Attempt ${attempt + 1} failed:`, error.message);
-    lastError = error;
-
-    await new Promise(r => setTimeout(r, 1000));
-  }
-}
-
-throw lastError || new Error("All API attempts failed.");
+    throw lastError || new Error("All API attempts failed.");
   } catch (error) {
-  console.error("Analysis failed:", error);
-  throw error;
-}
+    console.error("Analysis failed:", error);
+    throw error;
+  }
 };
 
 // Dashboard uses FLASH model + Parallel Execution for speed + Local Caching

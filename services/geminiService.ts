@@ -195,7 +195,7 @@ export const analyzeStock = async (query: string): Promise<AIAnalysisResult> => 
     - JSON object matching the schema.
     `;
 
-    // Using gemini-2.0-pro-exp-02-05 for deep analysis (Highest Accuracy)
+    // Using gemini-2.0-flash-exp for deep analysis (Fast & Smart)
     // Retry logic: Try up to validKeys.length times
     const maxRetries = 10; // Cap at 10 to avoid infinite loops if all keys fail
     let lastError;
@@ -215,7 +215,7 @@ export const analyzeStock = async (query: string): Promise<AIAnalysisResult> => 
         const ai = getAI(); // Rotation happens here
 
         const response = await ai.models.generateContent({
-          model: "gemini-2.0-pro-exp-02-05",
+          model: "gemini-2.0-flash-exp",
           contents: prompt,
           config: {
             tools: [{ googleSearch: {} }],

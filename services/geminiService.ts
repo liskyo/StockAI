@@ -1,8 +1,20 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { AIAnalysisResult, DashboardData, Source, StockPreview } from "../types";
 
-const apiKey = process.env.API_KEY || '';
-const ai = new GoogleGenAI({ apiKey });
+const getAI = () => {
+  const envKeys = (process.env.API_KEYS as unknown as string[]) || [];
+  const validKeys = Array.isArray(envKeys) && envKeys.length > 0
+    ? envKeys
+    : [process.env.API_KEY || process.env.GEMINI_API_KEY || ''];
+
+  const apiKey = validKeys[Math.floor(Math.random() * validKeys.length)];
+
+  if (!apiKey) {
+    console.warn("No API Key found!");
+  }
+
+  return new GoogleGenAI({ apiKey });
+};
 
 // Update cache key to invalidate potentially corrupted cache
 const CACHE_KEY = 'stock_winner_dashboard_cache_v3';
@@ -158,11 +170,12 @@ export const analyzeStock = async (query: string): Promise<AIAnalysisResult> => 
     `;
 
     // Using gemini-3-pro-preview for deep analysis (slower but smarter)
-    const response = await ai.models.generateContent({
+    // Using gemini-3-pro-preview for deep analysis (slower but smarter)
+    const response = await getAI().models.generateContent({
       model: "gemini-3-pro-preview",
       contents: prompt,
       config: {
-        tools: [{googleSearch: {}}],
+        tools: [{ googleSearch: {} }],
         responseMimeType: "application/json",
         responseSchema: analysisSchema,
         thinkingConfig: { thinkingBudget: 1024 }
@@ -178,12 +191,12 @@ export const analyzeStock = async (query: string): Promise<AIAnalysisResult> => 
 
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
     if (chunks) {
-        data.sources = chunks
-            .map((c: any) => c.web)
-            .filter((w: any) => w !== undefined)
-            .map((w: any) => ({ title: w.title || 'Source', uri: w.uri || '#' }));
+      data.sources = chunks
+        .map((c: any) => c.web)
+        .filter((w: any) => w !== undefined)
+        .map((w: any) => ({ title: w.title || 'Source', uri: w.uri || '#' }));
     }
-    
+
     return data;
   } catch (error) {
     console.error("Analysis failed:", error);
@@ -193,27 +206,27 @@ export const analyzeStock = async (query: string): Promise<AIAnalysisResult> => 
 
 // Dashboard uses FLASH model + Parallel Execution for speed + Local Caching
 export const getDashboardData = async (): Promise<DashboardData> => {
-    
-    // 1. CHECK CACHE
-    try {
-        const cached = localStorage.getItem(CACHE_KEY);
-        if (cached) {
-            const { timestamp, data } = JSON.parse(cached);
-            const now = Date.now();
-            // If cache is valid (less than CACHE_DURATION old)
-            if (now - timestamp < CACHE_DURATION) {
-                console.log("Using Cached Dashboard Data");
-                return data;
-            }
-        }
-    } catch (e) {
-        console.warn("Cache parsing failed", e);
-    }
 
-    // 2. Define Prompts for Parallel Execution
-    
-    // Request A: Standard Lists (Yahoo/CMoney)
-    const listsPrompt = `
+  // 1. CHECK CACHE
+  try {
+    const cached = localStorage.getItem(CACHE_KEY);
+    if (cached) {
+      const { timestamp, data } = JSON.parse(cached);
+      const now = Date.now();
+      // If cache is valid (less than CACHE_DURATION old)
+      if (now - timestamp < CACHE_DURATION) {
+        console.log("Using Cached Dashboard Data");
+        return data;
+      }
+    }
+  } catch (e) {
+    console.warn("Cache parsing failed", e);
+  }
+
+  // 2. Define Prompts for Parallel Execution
+
+  // Request A: Standard Lists (Yahoo/CMoney)
+  const listsPrompt = `
         Act as a TWSE Expert. Use Google Search to fetch data from:
         - Yahoo Rank: https://tw.stock.yahoo.com/rank/yield (High Dividend), https://tw.stock.yahoo.com/rank/volume
         - CMoney Institutional: https://www.cmoney.tw/finance/f00062.aspx
@@ -233,8 +246,8 @@ export const getDashboardData = async (): Promise<DashboardData> => {
         Output JSON matching schema.
     `;
 
-    // Request B: Dynamic Strategies (Hot Topics)
-    const strategiesPrompt = `
+  // Request B: Dynamic Strategies (Hot Topics)
+  const strategiesPrompt = `
         Act as a TWSE Expert. Search for "台股 熱門族群", "主流 概念股".
         Identify 3 CURRENT HOT THEMES (e.g. CoWoS, Robot, Energy, Military).
         
@@ -244,68 +257,68 @@ export const getDashboardData = async (): Promise<DashboardData> => {
         Output JSON matching schema.
     `;
 
-    try {
-        // Execute both requests in parallel using FLASH model for speed
-        // Now using responseSchema to ensure valid JSON structure
-        const [listsResponse, strategiesResponse] = await Promise.all([
-            ai.models.generateContent({
-                model: "gemini-3-flash-preview", // Flash is 5x faster
-                contents: listsPrompt,
-                config: { 
-                    tools: [{googleSearch: {}}], 
-                    responseMimeType: "application/json",
-                    responseSchema: dashboardListsSchema
-                }
-            }),
-            ai.models.generateContent({
-                model: "gemini-3-flash-preview", // Flash is 5x faster
-                contents: strategiesPrompt,
-                config: { 
-                    tools: [{googleSearch: {}}], 
-                    responseMimeType: "application/json",
-                    responseSchema: strategiesSchema
-                }
-            })
-        ]);
-
-        const listsData = listsResponse.text ? JSON.parse(listsResponse.text) : {};
-        const strategiesData = strategiesResponse.text ? JSON.parse(strategiesResponse.text) : {};
-
-        const safeList = (list: any[]) => Array.isArray(list) ? list : [];
-
-        const result: DashboardData = {
-            trending: safeList(listsData.trending),
-            fundamental: safeList(listsData.fundamental),
-            technical: safeList(listsData.technical),
-            chips: safeList(listsData.chips),
-            dividend: safeList(listsData.dividend),
-            strategies: safeList(strategiesData.strategies)
-        };
-
-        // SAVE TO CACHE
-        localStorage.setItem(CACHE_KEY, JSON.stringify({
-            timestamp: Date.now(),
-            data: result
-        }));
-
-        return result;
-
-    } catch (e) {
-        console.error("Dashboard fetch failed", e);
-        // Fallback to cache if request fails, even if expired
-        const cached = localStorage.getItem(CACHE_KEY);
-        if (cached) {
-             return JSON.parse(cached).data;
+  try {
+    // Execute both requests in parallel using FLASH model for speed
+    // Now using responseSchema to ensure valid JSON structure
+    const [listsResponse, strategiesResponse] = await Promise.all([
+      getAI().models.generateContent({
+        model: "gemini-3-flash-preview", // Flash is 5x faster
+        contents: listsPrompt,
+        config: {
+          tools: [{ googleSearch: {} }],
+          responseMimeType: "application/json",
+          responseSchema: dashboardListsSchema
         }
+      }),
+      getAI().models.generateContent({
+        model: "gemini-3-flash-preview", // Flash is 5x faster
+        contents: strategiesPrompt,
+        config: {
+          tools: [{ googleSearch: {} }],
+          responseMimeType: "application/json",
+          responseSchema: strategiesSchema
+        }
+      })
+    ]);
 
-        // Emergency fallback data
-        return {
-            trending: [{ symbol: '2330', name: '台積電', price: '1000', changePercent: 0, reason: '系統維護中' }],
-            fundamental: [],
-            technical: [],
-            chips: [],
-            dividend: [],
-            strategies: []
-        };
+    const listsData = listsResponse.text ? JSON.parse(listsResponse.text) : {};
+    const strategiesData = strategiesResponse.text ? JSON.parse(strategiesResponse.text) : {};
+
+    const safeList = (list: any[]) => Array.isArray(list) ? list : [];
+
+    const result: DashboardData = {
+      trending: safeList(listsData.trending),
+      fundamental: safeList(listsData.fundamental),
+      technical: safeList(listsData.technical),
+      chips: safeList(listsData.chips),
+      dividend: safeList(listsData.dividend),
+      strategies: safeList(strategiesData.strategies)
+    };
+
+    // SAVE TO CACHE
+    localStorage.setItem(CACHE_KEY, JSON.stringify({
+      timestamp: Date.now(),
+      data: result
+    }));
+
+    return result;
+
+  } catch (e) {
+    console.error("Dashboard fetch failed", e);
+    // Fallback to cache if request fails, even if expired
+    const cached = localStorage.getItem(CACHE_KEY);
+    if (cached) {
+      return JSON.parse(cached).data;
     }
+
+    // Emergency fallback data
+    return {
+      trending: [{ symbol: '2330', name: '台積電', price: '1000', changePercent: 0, reason: '系統維護中' }],
+      fundamental: [],
+      technical: [],
+      chips: [],
+      dividend: [],
+      strategies: []
+    };
+  }
 }

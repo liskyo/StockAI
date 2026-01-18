@@ -186,7 +186,8 @@ export const analyzeStock = async (query: string): Promise<AIAnalysisResult> => 
       - If searching finds multiple prices, use the most recent one.
       - **CRITICAL**: All text output (Name, Summary, Details, Risk Analysis) MUST be in **Traditional Chinese (繁體中文)**.
       - **FORMAT**: Return ONLY a valid, raw JSON object matching the schema. Do NOT use Markdown code blocks (\`\`\`json).
-
+      - **IMPORTANT**: Your response must be a single JSON object having keys: "symbol", "name", "currentPrice", "change", "changePercent", "overallScore", "trend", "fundamental", "technical", "chips", "marketSentiment", "retail", "tradeSetup", "riskAnalysis".
+      
       SCORING GUIDE:
       - Sentiment Score: > 80(Overheated / Greed), <20 (Panic / Fear).
       - Retail Score: Higher is better(meaning chips are stable, financing is decreasing or low).Low score means high retail crowding(high financing).
@@ -233,10 +234,14 @@ export const analyzeStock = async (query: string): Promise<AIAnalysisResult> => 
             throw new Error("No response from AI");
           }
 
+          // DEBUG: Log the raw text to see what the AI is actually saying
+          console.log(`[StockAI] Raw AI Response (${model}):`, response.text);
+
           const data = parseCleanJSON(response.text) as AIAnalysisResult;
           // Basic validation to ensure it's not empty garbage
           if (!data.symbol && !data.name) {
-            throw new Error("AI returned invalid/empty JSON data");
+            console.error("[StockAI] Invalid JSON content:", data);
+            throw new Error("AI returned invalid/empty JSON data (Missing symbol/name)");
           }
 
           data.timestamp = new Date().toLocaleString('zh-TW');

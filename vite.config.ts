@@ -4,10 +4,15 @@ import react from '@vitejs/plugin-react';
 
 export default defineConfig(({ mode }) => {
   const env = loadEnv(mode, '.', '');
-  const apiKeys = Object.keys(env)
+  const rawApiKeys = Object.keys(env)
     .filter(key => key.startsWith('GEMINI_API_KEY') || key.startsWith('GOOGLE_API_KEY'))
-    .map(key => env[key])
-    .filter(Boolean); // Remove undefined/empty strings
+    .map(key => env[key]);
+
+  // Support comma-separated keys in a single variable
+  const apiKeys = rawApiKeys
+    .flatMap(key => (key || '').split(','))
+    .map(key => key.trim())
+    .filter(key => key.length > 0);
 
   return {
     server: {

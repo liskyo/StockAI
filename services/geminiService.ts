@@ -4,6 +4,9 @@ import { AIAnalysisResult, DashboardData, Source, StockPreview } from "../types"
 declare const __API_KEYS__: string[];
 declare const __API_KEY__: string;
 
+// Module-level counter for Round-Robin rotation
+let keyIndexCounter = 0;
+
 const getAI = () => {
   // Vite replaces __API_KEYS__ with the literal array at build time
   const envKeys = (typeof __API_KEYS__ !== 'undefined' ? __API_KEYS__ : []);
@@ -14,13 +17,16 @@ const getAI = () => {
 
   console.log(`[StockAI] Debug - Loaded ${validKeys.length} API Keys`);
 
-  const apiKey = validKeys[Math.floor(Math.random() * validKeys.length)];
+  // Round-Robin Selection
+  const currentIndex = keyIndexCounter % validKeys.length;
+  const apiKey = validKeys[currentIndex];
+  keyIndexCounter++; // Increment for next call
 
   if (!apiKey) {
     console.error("[StockAI] CRITICAL ERROR: No Valid API Key found. Env vars might be missing.");
   } else {
     // Log masked key for verification (first 4 chars and last 4 chars)
-    console.log(`[StockAI] Using Key Index ${validKeys.indexOf(apiKey)} (Starts with: ${apiKey.substring(0, 4)}... Ends with: ...${apiKey.slice(-4)})`);
+    console.log(`[StockAI] Using Key Index ${currentIndex} (Starts with: ${apiKey.substring(0, 4)}... Ends with: ...${apiKey.slice(-4)})`);
   }
 
   return new GoogleGenAI({ apiKey });

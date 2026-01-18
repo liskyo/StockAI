@@ -186,32 +186,53 @@ export const analyzeStock = async (query: string): Promise<AIAnalysisResult> => 
     `;
 
     // Using gemini-2.5-pro for deep analysis (High Accuracy)
-    const response = await getAI().models.generateContent({
-      model: "gemini-2.5-pro",
-      contents: prompt,
-      config: {
-        tools: [{ googleSearch: {} }],
-        responseMimeType: "application/json",
-        responseSchema: analysisSchema
+    // Retry logic: Try up to validKeys.length times
+    const maxRetries = 10; // Cap at 10 to avoid infinite loops if all keys fail
+    let lastError;
+
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const ai = getAI(); // Rotation happens here
+
+        const response = await ai.models.generateContent({
+          model: "gemini-2.5-pro",
+          contents: prompt,
+          config: {
+            tools: [{ googleSearch: {} }],
+            responseMimeType: "application/json",
+            responseSchema: analysisSchema
+          }
+        });
+
+        if (!response.text) {
+          throw new Error("No response from AI");
+        }
+
+        const data = JSON.parse(response.text) as AIAnalysisResult;
+        data.timestamp = new Date().toLocaleString('zh-TW');
+
+        const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+        if (chunks) {
+          data.sources = chunks
+            .map((c: any) => c.web)
+            .filter((w: any) => w !== undefined)
+            .map((w: any) => ({ title: w.title || 'Source', uri: w.uri || '#' }));
+        }
+
+        return data; // Success!
+
+      } catch (error: any) {
+        console.warn(`[StockAI] Attempt ${attempt + 1} failed:`, error.message);
+        lastError = error;
+
+        // If it's not a 429 (Quota) or 400 (Invalid Key), maybe don't retry? 
+        // But for now, safe to retry everything to find a working key/model combo.
+        // Wait a bit before next retry to avoid hammering
+        await new Promise(r => setTimeout(r, 1000));
       }
-    });
-
-    if (!response.text) {
-      throw new Error("No response from AI");
     }
 
-    const data = JSON.parse(response.text) as AIAnalysisResult;
-    data.timestamp = new Date().toLocaleString('zh-TW');
-
-    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-    if (chunks) {
-      data.sources = chunks
-        .map((c: any) => c.web)
-        .filter((w: any) => w !== undefined)
-        .map((w: any) => ({ title: w.title || 'Source', uri: w.uri || '#' }));
-    }
-
-    return data;
+    throw lastError || new Error("All API attempts failed.");
   } catch (error) {
     console.error("Analysis failed:", error);
     throw error;
@@ -272,27 +293,39 @@ export const getDashboardData = async (): Promise<DashboardData> => {
     `;
 
   try {
-    // Execute both requests in parallel using FLASH model for speed
-    // Now using responseSchema to ensure valid JSON structure
-    const [listsResponse, strategiesResponse] = await Promise.all([
-      getAI().models.generateContent({
-        model: "gemini-2.5-flash", // Fast
-        contents: listsPrompt,
-        config: {
-          tools: [{ googleSearch: {} }],
-          responseMimeType: "application/json",
-          responseSchema: dashboardListsSchema
+    const maxRetries = 5;
+    let listsResponse, strategiesResponse;
+
+    // Helper to fetch with retry
+    const fetchWithRetry = async (model: string, prompt: string, schema: Schema) => {
+      let lastErr;
+      for (let i = 0; i < maxRetries; i++) {
+        try {
+          const ai = getAI();
+          // For gemini-2.5-flash, sometimes JSON mode is strict.
+          // IF 400 error insists "Mime type unsupported", we might need to remove responseMimeType for Flash
+          // BUT let's try standard retry first.
+          return await ai.models.generateContent({
+            model: model,
+            contents: prompt,
+            config: {
+              tools: [{ googleSearch: {} }],
+              responseMimeType: "application/json",
+              responseSchema: schema
+            }
+          });
+        } catch (e: any) {
+          console.warn(`[StockAI] Dashboard fetch attempt ${i + 1} failed:`, e.message);
+          lastErr = e;
+          await new Promise(r => setTimeout(r, 1000));
         }
-      }),
-      getAI().models.generateContent({
-        model: "gemini-2.5-flash", // Fast
-        contents: strategiesPrompt,
-        config: {
-          tools: [{ googleSearch: {} }],
-          responseMimeType: "application/json",
-          responseSchema: strategiesSchema
-        }
-      })
+      }
+      throw lastErr;
+    };
+
+    [listsResponse, strategiesResponse] = await Promise.all([
+      fetchWithRetry("gemini-2.5-flash", listsPrompt, dashboardListsSchema),
+      fetchWithRetry("gemini-2.5-flash", strategiesPrompt, strategiesSchema)
     ]);
 
     const listsData = listsResponse.text ? JSON.parse(listsResponse.text) : {};

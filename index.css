@@ -1,9 +1,32 @@
-@tailwind base;
-@tailwind components;
-@tailwind utilities;
+@import "tailwindcss";
 
+@theme {
+  --color-tech-dark: #0f172a;
+  --color-tech-card: #1e293b;
+  --color-neon-green: #10b981;
+  --color-neon-red: #f43f5e;
+  --color-neon-blue: #3b82f6;
+  --color-neon-purple: #8b5cf6;
+
+  --font-sans: 'Inter', system-ui, sans-serif;
+
+  --animate-pulse-slow: pulse 3s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  --animate-glow: glow 2s ease-in-out infinite alternate;
+
+  @keyframes glow {
+    0% {
+      box-shadow: 0 0 5px #3b82f6;
+    }
+
+    100% {
+      box-shadow: 0 0 20px #3b82f6, 0 0 10px #8b5cf6;
+    }
+  }
+}
+
+/* Custom Utilities needing specific classes if not handled by theme */
 body {
-  background-color: #0f172a;
+  background-color: var(--color-tech-dark);
   color: #e2e8f0;
   overscroll-behavior-y: none;
 }
@@ -15,9 +38,10 @@ body {
 }
 
 .scrollbar-hide::-webkit-scrollbar {
-    display: none;
+  display: none;
 }
+
 .scrollbar-hide {
-    -ms-overflow-style: none;
-    scrollbar-width: none;
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }

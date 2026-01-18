@@ -12,10 +12,15 @@ const getAI = () => {
     ? envKeys
     : [(typeof __API_KEY__ !== 'undefined' ? __API_KEY__ : '')].filter(Boolean);
 
+  console.log(`[StockAI] Debug - Loaded ${validKeys.length} API Keys`);
+
   const apiKey = validKeys[Math.floor(Math.random() * validKeys.length)];
 
   if (!apiKey) {
-    console.warn("No API Key found!");
+    console.error("[StockAI] CRITICAL ERROR: No Valid API Key found. Env vars might be missing.");
+  } else {
+    // Log masked key for verification (first 4 chars)
+    console.log(`[StockAI] Using Key Index ${validKeys.indexOf(apiKey)} (Starts with: ${apiKey.substring(0, 4)}...)`);
   }
 
   return new GoogleGenAI({ apiKey });

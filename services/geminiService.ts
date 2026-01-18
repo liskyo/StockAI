@@ -195,9 +195,11 @@ export const analyzeStock = async (query: string): Promise<AIAnalysisResult> => 
     - JSON object matching the schema.
     `;
 
-    // Using gemini-2.5-flash for deep analysis (Requested by User)
-    // Retry logic: Try up to validKeys.length times
-    const maxRetries = 10; // Cap at 10 to avoid infinite loops if all keys fail
+    // Models to try in order (User requested 2.5-flash first)
+    const models = ["gemini-2.5-flash", "gemini-2.0-flash-exp"];
+
+    // Retry logic: Try each model with key rotation
+    const maxRetriesPerModel = 5;
     let lastError;
 
     // Helper to clean JSON string from markdown
@@ -210,45 +212,57 @@ export const analyzeStock = async (query: string): Promise<AIAnalysisResult> => 
       }
     };
 
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
-      try {
-        const ai = getAI(); // Rotation happens here
+    for (const model of models) {
+      console.log(`[StockAI] Trying Analysis with Model: ${model}`);
 
-        const response = await ai.models.generateContent({
-          model: "gemini-2.5-flash",
-          contents: prompt,
-          config: {
-            tools: [{ googleSearch: {} }],
-            // REMOVE strict JSON enforcement to avoid "Tool use with response mime type unsupported" error
+      for (let attempt = 0; attempt < maxRetriesPerModel; attempt++) {
+        try {
+          const ai = getAI(); // Rotation happens here
+
+          const response = await ai.models.generateContent({
+            model: model,
+            contents: prompt,
+            config: {
+              tools: [{ googleSearch: {} }],
+              // REMOVE strict JSON enforcement
+            }
+          });
+
+          if (!response.text) {
+            console.warn(`[StockAI] Empty response from ${model}`);
+            throw new Error("No response from AI");
           }
-        });
 
-        if (!response.text) {
-          throw new Error("No response from AI");
+          const data = parseCleanJSON(response.text) as AIAnalysisResult;
+          // Basic validation to ensure it's not empty garbage
+          if (!data.symbol && !data.name) {
+            throw new Error("AI returned invalid/empty JSON data");
+          }
+
+          data.timestamp = new Date().toLocaleString('zh-TW');
+
+          const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+          if (chunks) {
+            data.sources = chunks
+              .map((c: any) => c.web)
+              .filter((w: any) => w !== undefined)
+              .map((w: any) => ({ title: w.title || 'Source', uri: w.uri || '#' }));
+          }
+
+          return data; // Success!
+
+        } catch (error: any) {
+          console.warn(`[StockAI] ${model} Attempt ${attempt + 1} failed:`, error.message);
+          lastError = error;
+
+          // Exponential Backoff: 1s, 2s, 4s, 8s...
+          const delay = Math.pow(2, attempt) * 1000;
+          await new Promise(r => setTimeout(r, delay));
         }
-
-        const data = parseCleanJSON(response.text) as AIAnalysisResult;
-        data.timestamp = new Date().toLocaleString('zh-TW');
-
-        const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-        if (chunks) {
-          data.sources = chunks
-            .map((c: any) => c.web)
-            .filter((w: any) => w !== undefined)
-            .map((w: any) => ({ title: w.title || 'Source', uri: w.uri || '#' }));
-        }
-
-        return data; // Success!
-
-      } catch (error: any) {
-        console.warn(`[StockAI] Attempt ${attempt + 1} failed:`, error.message);
-        lastError = error;
-
-        await new Promise(r => setTimeout(r, 1000));
       }
     }
 
-    throw lastError || new Error("All API attempts failed.");
+    throw lastError || new Error("All API attempts failed across all models.");
   } catch (error) {
     console.error("Analysis failed:", error);
     throw error;

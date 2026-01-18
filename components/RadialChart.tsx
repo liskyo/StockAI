@@ -14,32 +14,29 @@ const RadialChart: React.FC<RadialChartProps> = ({ score, label, color }) => {
   ];
 
   return (
-    <div className="flex flex-col items-center justify-center h-full">
-      <div className="h-24 w-24 relative">
-        <ResponsiveContainer width="100%" height="100%">
-          <PieChart>
-            <Pie
-              data={data}
-              cx="50%"
-              cy="50%"
-              innerRadius={35}
-              outerRadius={45}
-              startAngle={90}
-              endAngle={-270}
-              dataKey="value"
-              stroke="none"
-            >
-              <Cell key={`cell-0`} fill={color} />
-              <Cell key={`cell-1`} fill="#334155" /> 
-            </Pie>
-            
-          </PieChart>
-        </ResponsiveContainer>
+    <div className="flex flex-col items-center justify-center h-full w-full">
+      <div className="relative flex items-center justify-center">
+        <PieChart width={64} height={64}>
+          <Pie
+            data={data}
+            cx="50%"
+            cy="50%"
+            innerRadius={22}
+            outerRadius={30}
+            startAngle={90}
+            endAngle={-270}
+            dataKey="value"
+            stroke="none"
+          >
+            <Cell key={`cell-0`} fill={color} />
+            <Cell key={`cell-1`} fill="#334155" />
+          </Pie>
+        </PieChart>
         <div className="absolute inset-0 flex items-center justify-center">
-            <span className="text-xl font-bold text-white">{score}</span>
+          <span className="text-sm font-bold text-white">{score}</span>
         </div>
       </div>
-      <span className="text-xs text-gray-400 mt-1 uppercase tracking-wider">{label}</span>
+      {label && <span className="text-xs text-gray-400 mt-1 uppercase tracking-wider">{label}</span>}
     </div>
   );
 };

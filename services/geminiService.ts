@@ -328,36 +328,41 @@ export const getDashboardData = async (): Promise<DashboardData> => {
 
     // Helper to fetch with retry
     // Helper to fetch with retry
-    const fetchWithRetry = async (model: string, prompt: string) => { // Removed schema arg as we are untyping config
+    // Helper to fetch with retry and model fallback
+    const fetchWithRetry = async (primaryModel: string, prompt: string) => {
+      const fallbackModel = "gemini-2.0-flash-exp";
+      const models = primaryModel === fallbackModel ? [primaryModel] : [primaryModel, fallbackModel];
+
       let lastErr;
-      for (let i = 0; i < maxRetries; i++) {
-        try {
-          const ai = getAI();
-          // Relaxed config: No responseMimeType to support tool use. 
-          // Relying on prompt instruction "Output JSON matching schema".
-          const res = await ai.models.generateContent({
-            model: model,
-            contents: prompt + "\nRETURN ONLY RAW JSON. NO MARKDOWN.",
-            config: {
-              tools: [{ googleSearch: {} }],
-            }
-          });
 
-          if (!res.text) throw new Error("Empty response");
+      for (const model of models) {
+        for (let i = 0; i < maxRetries; i++) {
+          try {
+            const ai = getAI();
+            const res = await ai.models.generateContent({
+              model: model,
+              contents: prompt + "\nRETURN ONLY RAW JSON. NO MARKDOWN.",
+              config: { tools: [{ googleSearch: {} }] }
+            });
 
-          // Clean markdown
-          const cleanText = res.text.replace(/```json/g, '').replace(/```/g, '').trim();
-          return JSON.parse(cleanText);
+            if (!res.text) throw new Error(`Empty response from ${model}`);
 
-        } catch (e: any) {
-          console.warn(`[StockAI] Dashboard fetch attempt ${i + 1} failed:`, e.message);
-          lastErr = e;
-          await new Promise(r => setTimeout(r, 1000));
+            const cleanText = res.text.replace(/```json/g, '').replace(/```/g, '').trim();
+            return JSON.parse(cleanText);
+
+          } catch (e: any) {
+            console.warn(`[StockAI] Dashboard (${model}) attempt ${i + 1} failed:`, e.message);
+            lastErr = e;
+            // Exponential Backoff: 1s, 2s, 4s...
+            const delay = Math.pow(2, i) * 1000;
+            await new Promise(r => setTimeout(r, delay));
+          }
         }
       }
       throw lastErr;
     };
 
+    // Parallel Request using Primary Model (2.5-flash) with fallback
     const [listsData, strategiesData] = await Promise.all([
       fetchWithRetry("gemini-2.5-flash", listsPrompt),
       fetchWithRetry("gemini-2.5-flash", strategiesPrompt)

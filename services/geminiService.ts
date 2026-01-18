@@ -185,67 +185,74 @@ export const analyzeStock = async (query: string): Promise<AIAnalysisResult> => 
       - Currency: TWD.
       - If searching finds multiple prices, use the most recent one.
       - **CRITICAL**: All text output (Name, Summary, Details, Risk Analysis) MUST be in **Traditional Chinese (繁體中文)**.
-      
+      - **FORMAT**: Return ONLY a valid, raw JSON object matching the schema. Do NOT use Markdown code blocks (```json).
+
       SCORING GUIDE:
-      - Sentiment Score: >80 (Overheated/Greed), <20 (Panic/Fear).
-      - Retail Score: Higher is better (meaning chips are stable, financing is decreasing or low). Low score means high retail crowding (high financing).
+      - Sentiment Score: > 80(Overheated / Greed), <20 (Panic / Fear).
+      - Retail Score: Higher is better(meaning chips are stable, financing is decreasing or low).Low score means high retail crowding(high financing).
 
       OUTPUT:
-      - JSON object matching the schema.
+    - JSON object matching the schema.
     `;
 
-    // Using gemini-2.5-pro for deep analysis (High Accuracy)
+    // Using gemini-2.0-pro-exp-02-05 for deep analysis (Highest Accuracy)
     // Retry logic: Try up to validKeys.length times
     const maxRetries = 10; // Cap at 10 to avoid infinite loops if all keys fail
     let lastError;
 
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
+    // Helper to clean JSON string from markdown
+    const parseCleanJSON = (text: string): any => {
       try {
-        const ai = getAI(); // Rotation happens here
+        const cleanText = text.replace(/```json / g, '').replace(/```/g, '').trim();
+    return JSON.parse(cleanText);
+  } catch (e) {
+    throw new Error("Failed to parse AI JSON response: " + e.message);
+  }
+};
 
-        const response = await ai.models.generateContent({
-          model: "gemini-2.5-pro",
-          contents: prompt,
-          config: {
-            tools: [{ googleSearch: {} }],
-            responseMimeType: "application/json",
-            responseSchema: analysisSchema
-          }
-        });
+for (let attempt = 0; attempt < maxRetries; attempt++) {
+  try {
+    const ai = getAI(); // Rotation happens here
 
-        if (!response.text) {
-          throw new Error("No response from AI");
-        }
-
-        const data = JSON.parse(response.text) as AIAnalysisResult;
-        data.timestamp = new Date().toLocaleString('zh-TW');
-
-        const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-        if (chunks) {
-          data.sources = chunks
-            .map((c: any) => c.web)
-            .filter((w: any) => w !== undefined)
-            .map((w: any) => ({ title: w.title || 'Source', uri: w.uri || '#' }));
-        }
-
-        return data; // Success!
-
-      } catch (error: any) {
-        console.warn(`[StockAI] Attempt ${attempt + 1} failed:`, error.message);
-        lastError = error;
-
-        // If it's not a 429 (Quota) or 400 (Invalid Key), maybe don't retry? 
-        // But for now, safe to retry everything to find a working key/model combo.
-        // Wait a bit before next retry to avoid hammering
-        await new Promise(r => setTimeout(r, 1000));
+    const response = await ai.models.generateContent({
+      model: "gemini-2.0-pro-exp-02-05",
+      contents: prompt,
+      config: {
+        tools: [{ googleSearch: {} }],
+        // REMOVE strict JSON enforcement to avoid "Tool use with response mime type unsupported" error
       }
+    });
+
+    if (!response.text) {
+      throw new Error("No response from AI");
     }
 
-    throw lastError || new Error("All API attempts failed.");
-  } catch (error) {
-    console.error("Analysis failed:", error);
-    throw error;
+    const data = parseCleanJSON(response.text) as AIAnalysisResult;
+    data.timestamp = new Date().toLocaleString('zh-TW');
+
+    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+    if (chunks) {
+      data.sources = chunks
+        .map((c: any) => c.web)
+        .filter((w: any) => w !== undefined)
+        .map((w: any) => ({ title: w.title || 'Source', uri: w.uri || '#' }));
+    }
+
+    return data; // Success!
+
+  } catch (error: any) {
+    console.warn(`[StockAI] Attempt ${attempt + 1} failed:`, error.message);
+    lastError = error;
+
+    await new Promise(r => setTimeout(r, 1000));
   }
+}
+
+throw lastError || new Error("All API attempts failed.");
+  } catch (error) {
+  console.error("Analysis failed:", error);
+  throw error;
+}
 };
 
 // Dashboard uses FLASH model + Parallel Execution for speed + Local Caching

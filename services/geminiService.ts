@@ -237,7 +237,50 @@ export const analyzeStock = async (query: string): Promise<AIAnalysisResult> => 
           // DEBUG: Log the raw text to see what the AI is actually saying
           console.log(`[StockAI] Raw AI Response (${model}):`, response.text);
 
-          const data = parseCleanJSON(response.text) as AIAnalysisResult;
+          const rawData = parseCleanJSON(response.text);
+
+          // Normalize Data Helper (Fixes Schema Mismatch from AI)
+          const normalizeDetails = (details: any): string[] => {
+            if (Array.isArray(details)) return details.map(String);
+            if (typeof details === 'object' && details !== null) {
+              return Object.entries(details).map(([k, v]) => `${k}: ${v}`);
+            }
+            return [String(details || '')];
+          };
+
+          const normalizeRisk = (risk: any): string => {
+            if (typeof risk === 'string') return risk;
+            if (Array.isArray(risk)) return risk.join(' ');
+            if (typeof risk === 'object' && risk?.keyRisks) {
+              return Array.isArray(risk.keyRisks) ? risk.keyRisks.join(' ') : String(risk.keyRisks);
+            }
+            return JSON.stringify(risk);
+          }
+
+          const data: AIAnalysisResult = {
+            ...rawData,
+            fundamental: {
+              ...rawData.fundamental,
+              details: normalizeDetails(rawData.fundamental?.details)
+            },
+            technical: {
+              ...rawData.technical,
+              details: normalizeDetails(rawData.technical?.details)
+            },
+            chips: {
+              ...rawData.chips,
+              details: normalizeDetails(rawData.chips?.details)
+            },
+            marketSentiment: {
+              ...rawData.marketSentiment,
+              details: normalizeDetails(rawData.marketSentiment?.details)
+            },
+            retail: {
+              ...rawData.retail,
+              details: normalizeDetails(rawData.retail?.details)
+            },
+            riskAnalysis: normalizeRisk(rawData.riskAnalysis)
+          };
           // Basic validation to ensure it's not empty garbage
           if (!data.symbol && !data.name) {
             console.error("[StockAI] Invalid JSON content:", data);

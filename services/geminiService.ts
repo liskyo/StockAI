@@ -257,6 +257,37 @@ export const analyzeStock = async (query: string): Promise<AIAnalysisResult> => 
             return JSON.stringify(risk);
           }
 
+          const normalizeTradeSetup = (setup: any, currentPrice: number) => {
+            // Default "HOLD" setup
+            const defaultSetup = {
+              action: "HOLD",
+              entryPriceLow: 0,
+              entryPriceHigh: 0,
+              targetPrice: 0,
+              stopLoss: 0,
+              probability: 50,
+              timeframe: "1-2 Weeks"
+            };
+
+            if (!setup) return defaultSetup;
+
+            // If AI returned structured data, try to use it with fallbacks
+            if (typeof setup === 'object') {
+              return {
+                action: ["BUY", "SELL", "HOLD"].includes(setup.action) ? setup.action : "HOLD",
+                entryPriceLow: Number(setup.entryPriceLow) || currentPrice,
+                entryPriceHigh: Number(setup.entryPriceHigh) || currentPrice,
+                targetPrice: Number(setup.targetPrice) || (currentPrice * 1.1),
+                stopLoss: Number(setup.stopLoss) || (currentPrice * 0.9),
+                probability: Number(setup.probability) || 60,
+                timeframe: setup.timeframe || "1-4 Weeks"
+              };
+            }
+
+            // If it's just a text string (AI sometimes does this), return default
+            return defaultSetup;
+          };
+
           const data: AIAnalysisResult = {
             ...rawData,
             fundamental: {
@@ -279,6 +310,7 @@ export const analyzeStock = async (query: string): Promise<AIAnalysisResult> => 
               ...rawData.retail,
               details: normalizeDetails(rawData.retail?.details)
             },
+            tradeSetup: normalizeTradeSetup(rawData.tradeSetup, rawData.currentPrice || 0),
             riskAnalysis: normalizeRisk(rawData.riskAnalysis)
           };
           // Basic validation to ensure it's not empty garbage

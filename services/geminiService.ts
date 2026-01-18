@@ -297,23 +297,28 @@ export const getDashboardData = async (): Promise<DashboardData> => {
     let listsResponse, strategiesResponse;
 
     // Helper to fetch with retry
-    const fetchWithRetry = async (model: string, prompt: string, schema: Schema) => {
+    // Helper to fetch with retry
+    const fetchWithRetry = async (model: string, prompt: string) => { // Removed schema arg as we are untyping config
       let lastErr;
       for (let i = 0; i < maxRetries; i++) {
         try {
           const ai = getAI();
-          // For gemini-2.5-flash, sometimes JSON mode is strict.
-          // IF 400 error insists "Mime type unsupported", we might need to remove responseMimeType for Flash
-          // BUT let's try standard retry first.
-          return await ai.models.generateContent({
+          // Relaxed config: No responseMimeType to support tool use. 
+          // Relying on prompt instruction "Output JSON matching schema".
+          const res = await ai.models.generateContent({
             model: model,
-            contents: prompt,
+            contents: prompt + "\nRETURN ONLY RAW JSON. NO MARKDOWN.",
             config: {
               tools: [{ googleSearch: {} }],
-              responseMimeType: "application/json",
-              responseSchema: schema
             }
           });
+
+          if (!res.text) throw new Error("Empty response");
+
+          // Clean markdown
+          const cleanText = res.text.replace(/```json/g, '').replace(/```/g, '').trim();
+          return JSON.parse(cleanText);
+
         } catch (e: any) {
           console.warn(`[StockAI] Dashboard fetch attempt ${i + 1} failed:`, e.message);
           lastErr = e;
@@ -323,23 +328,25 @@ export const getDashboardData = async (): Promise<DashboardData> => {
       throw lastErr;
     };
 
-    [listsResponse, strategiesResponse] = await Promise.all([
-      fetchWithRetry("gemini-2.5-flash", listsPrompt, dashboardListsSchema),
-      fetchWithRetry("gemini-2.5-flash", strategiesPrompt, strategiesSchema)
+    const [listsData, strategiesData] = await Promise.all([
+      fetchWithRetry("gemini-2.5-flash", listsPrompt),
+      fetchWithRetry("gemini-2.5-flash", strategiesPrompt)
     ]);
 
-    const listsData = listsResponse.text ? JSON.parse(listsResponse.text) : {};
-    const strategiesData = strategiesResponse.text ? JSON.parse(strategiesResponse.text) : {};
+    // Parsing is now done inside fetchWithRetry, so listsData IS the object.
+    // Ensure fallback if somehow undefined
+    const validListsData = listsData || {};
+    const validStrategiesData = strategiesData || {};
 
     const safeList = (list: any[]) => Array.isArray(list) ? list : [];
 
     const result: DashboardData = {
-      trending: safeList(listsData.trending),
-      fundamental: safeList(listsData.fundamental),
-      technical: safeList(listsData.technical),
-      chips: safeList(listsData.chips),
-      dividend: safeList(listsData.dividend),
-      strategies: safeList(strategiesData.strategies)
+      trending: safeList(validListsData.trending),
+      fundamental: safeList(validListsData.fundamental),
+      technical: safeList(validListsData.technical),
+      chips: safeList(validListsData.chips),
+      dividend: safeList(validListsData.dividend),
+      strategies: safeList(validStrategiesData.strategies)
     };
 
     // SAVE TO CACHE

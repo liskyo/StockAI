@@ -1,11 +1,16 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { AIAnalysisResult, DashboardData, Source, StockPreview } from "../types";
 
+declare const __API_KEYS__: string[];
+declare const __API_KEY__: string;
+
 const getAI = () => {
-  const envKeys = (process.env.API_KEYS as unknown as string[]) || [];
+  // Vite replaces __API_KEYS__ with the literal array at build time
+  const envKeys = (typeof __API_KEYS__ !== 'undefined' ? __API_KEYS__ : []);
+
   const validKeys = Array.isArray(envKeys) && envKeys.length > 0
     ? envKeys
-    : [process.env.API_KEY || process.env.GEMINI_API_KEY || ''];
+    : [(typeof __API_KEY__ !== 'undefined' ? __API_KEY__ : '')].filter(Boolean);
 
   const apiKey = validKeys[Math.floor(Math.random() * validKeys.length)];
 

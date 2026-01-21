@@ -70,6 +70,7 @@ export interface AIAnalysisResult {
   chips: AnalysisSection; // Institutional holdings/flow
   
   // New Dimensions
+  industry: AnalysisSection;        // Industry trends & Macro environment
   marketSentiment: AnalysisSection; // News, Social Media, Fear/Greed
   retail: AnalysisSection;          // Financing, Short Selling, Retail participation
   

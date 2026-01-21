@@ -11,7 +11,9 @@ import {
   ArrowUp,
   ArrowDown,
   MessageCircleHeart,
-  User
+  User,
+  Scale,
+  Globe
 } from 'lucide-react';
 
 interface StockDetailProps {
@@ -77,9 +79,15 @@ const StockDetail: React.FC<StockDetailProps> = ({ data, onBack }) => {
           {/* Right: Score */}
           <div className="flex items-center gap-6">
              <div className="text-right">
-                <p className="text-gray-400 text-sm">AI 綜合評分</p>
+                <div className="flex items-center justify-end gap-1 text-gray-400 text-sm mb-1">
+                    <Scale size={12} />
+                    <span>AI 權重評分</span>
+                </div>
                 <div className={`text-5xl font-bold ${themeColor} drop-shadow-lg`}>
                     {data.overallScore}
+                </div>
+                <div className="text-[10px] text-gray-500 mt-1 bg-slate-800/50 px-2 py-1 rounded border border-slate-700">
+                    基30% 技20% 籌15% 產15% 散10% 訊10%
                 </div>
              </div>
           </div>
@@ -148,15 +156,15 @@ const StockDetail: React.FC<StockDetailProps> = ({ data, onBack }) => {
         </div>
       </div>
 
-      {/* 3 Pillars Analysis Grid (Row 1) */}
+      {/* 6 Dimensions Analysis Grid (2 Rows x 3 Cols) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         
-        {/* Fundamental */}
+        {/* 1. Fundamental */}
         <div className="glass-panel rounded-2xl p-5 hover:bg-slate-800/80 transition-colors">
           <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-3">
              <div className="flex items-center gap-2">
                 <DollarSign className="w-5 h-5 text-emerald-400" />
-                <h3 className="font-bold text-white">基本面</h3>
+                <h3 className="font-bold text-white">基本面 (30%)</h3>
              </div>
              <div className="h-16 w-16">
                  <RadialChart score={data.fundamental?.score || 0} label="" color="#10b981" />
@@ -173,12 +181,12 @@ const StockDetail: React.FC<StockDetailProps> = ({ data, onBack }) => {
           </ul>
         </div>
 
-        {/* Technical */}
+        {/* 2. Technical */}
         <div className="glass-panel rounded-2xl p-5 hover:bg-slate-800/80 transition-colors">
           <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-3">
              <div className="flex items-center gap-2">
                 <BarChart2 className="w-5 h-5 text-blue-400" />
-                <h3 className="font-bold text-white">技術面</h3>
+                <h3 className="font-bold text-white">技術面 (20%)</h3>
              </div>
              <div className="h-16 w-16">
                  <RadialChart score={data.technical?.score || 0} label="" color="#3b82f6" />
@@ -195,12 +203,12 @@ const StockDetail: React.FC<StockDetailProps> = ({ data, onBack }) => {
           </ul>
         </div>
 
-        {/* Chips */}
+        {/* 3. Chips */}
         <div className="glass-panel rounded-2xl p-5 hover:bg-slate-800/80 transition-colors">
           <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-3">
              <div className="flex items-center gap-2">
                 <Users className="w-5 h-5 text-purple-400" />
-                <h3 className="font-bold text-white">籌碼面 (法人)</h3>
+                <h3 className="font-bold text-white">籌碼面 (15%)</h3>
              </div>
              <div className="h-16 w-16">
                  <RadialChart score={data.chips?.score || 0} label="" color="#8b5cf6" />
@@ -216,40 +224,36 @@ const StockDetail: React.FC<StockDetailProps> = ({ data, onBack }) => {
             ))}
           </ul>
         </div>
-      </div>
 
-      {/* New Dimensions: Market Sentiment & Retail Indicators (Row 2) */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
-        
-        {/* Market Sentiment */}
+        {/* 4. Industry/Macro (New) */}
         <div className="glass-panel rounded-2xl p-5 hover:bg-slate-800/80 transition-colors border border-slate-700/50">
           <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-3">
              <div className="flex items-center gap-2">
-                <MessageCircleHeart className="w-5 h-5 text-pink-400" />
-                <h3 className="font-bold text-white">市場情緒 (新聞/社群)</h3>
+                <Globe className="w-5 h-5 text-cyan-400" />
+                <h3 className="font-bold text-white">產業總經 (15%)</h3>
              </div>
              <div className="h-16 w-16">
-                 {/* Pink/Red for sentiment */}
-                 <RadialChart score={data.marketSentiment?.score || 0} label="" color="#f472b6" />
+                 {/* Cyan for Macro */}
+                 <RadialChart score={data.industry?.score || 0} label="" color="#22d3ee" />
              </div>
           </div>
-          <p className="text-sm text-white mb-3 font-medium">{data.marketSentiment?.summary}</p>
+          <p className="text-sm text-white mb-3 font-medium">{data.industry?.summary}</p>
           <ul className="space-y-2">
-            {(data.marketSentiment?.details || []).map((detail, i) => (
+            {(data.industry?.details || []).map((detail, i) => (
                 <li key={i} className="text-xs text-gray-400 flex items-start">
-                    <span className="mr-2 text-pink-500">•</span>
+                    <span className="mr-2 text-cyan-500">•</span>
                     {detail}
                 </li>
             ))}
           </ul>
         </div>
 
-        {/* Retail Indicators */}
+        {/* 5. Retail Indicators */}
         <div className="glass-panel rounded-2xl p-5 hover:bg-slate-800/80 transition-colors border border-slate-700/50">
           <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-3">
              <div className="flex items-center gap-2">
                 <User className="w-5 h-5 text-orange-400" />
-                <h3 className="font-bold text-white">散戶指標 (融資券)</h3>
+                <h3 className="font-bold text-white">散戶指標 (10%)</h3>
              </div>
              <div className="h-16 w-16">
                  {/* Orange for retail/caution */}
@@ -261,6 +265,29 @@ const StockDetail: React.FC<StockDetailProps> = ({ data, onBack }) => {
             {(data.retail?.details || []).map((detail, i) => (
                 <li key={i} className="text-xs text-gray-400 flex items-start">
                     <span className="mr-2 text-orange-500">•</span>
+                    {detail}
+                </li>
+            ))}
+          </ul>
+        </div>
+
+        {/* 6. Market Sentiment */}
+        <div className="glass-panel rounded-2xl p-5 hover:bg-slate-800/80 transition-colors border border-slate-700/50">
+          <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-3">
+             <div className="flex items-center gap-2">
+                <MessageCircleHeart className="w-5 h-5 text-pink-400" />
+                <h3 className="font-bold text-white">市場情緒 (10%)</h3>
+             </div>
+             <div className="h-16 w-16">
+                 {/* Pink/Red for sentiment */}
+                 <RadialChart score={data.marketSentiment?.score || 0} label="" color="#f472b6" />
+             </div>
+          </div>
+          <p className="text-sm text-white mb-3 font-medium">{data.marketSentiment?.summary}</p>
+          <ul className="space-y-2">
+            {(data.marketSentiment?.details || []).map((detail, i) => (
+                <li key={i} className="text-xs text-gray-400 flex items-start">
+                    <span className="mr-2 text-pink-500">•</span>
                     {detail}
                 </li>
             ))}

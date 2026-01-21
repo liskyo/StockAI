@@ -69,6 +69,15 @@ const analysisSchema: Schema = {
       },
       required: ["score", "summary", "details"]
     },
+    industry: {
+      type: Type.OBJECT,
+      properties: {
+        score: { type: Type.NUMBER },
+        summary: { type: Type.STRING },
+        details: { type: Type.ARRAY, items: { type: Type.STRING } }
+      },
+      required: ["score", "summary", "details"]
+    },
     marketSentiment: {
       type: Type.OBJECT,
       properties: {
@@ -102,7 +111,7 @@ const analysisSchema: Schema = {
     },
     riskAnalysis: { type: Type.STRING }
   },
-  required: ["symbol", "name", "currentPrice", "change", "changePercent", "overallScore", "trend", "fundamental", "technical", "chips", "marketSentiment", "retail", "tradeSetup", "riskAnalysis"]
+  required: ["symbol", "name", "currentPrice", "change", "changePercent", "overallScore", "trend", "fundamental", "technical", "chips", "industry", "marketSentiment", "retail", "tradeSetup", "riskAnalysis"]
 };
 
 const dashboardListsSchema: Schema = {
@@ -144,12 +153,27 @@ export const analyzeStock = async (query: string, mode: 'flash' | 'pro' = 'flash
       Target Stock: "${query}"
       
       TASK:
-      1. USE GOOGLE SEARCH for real-time price, news, and institutional data.
-      2. Analyze Fundamental, Technical, Chips, Market Sentiment, and Retail Indicators.
+      1. USE GOOGLE SEARCH for real-time price, news, institutional data, retail financing status, and INDUSTRY SECTOR TRENDS.
+      2. Analyze Fundamental, Technical, Chips, Industry/Macro, Market Sentiment, and Retail Indicators.
+      
+      CRITICAL SCORING RULES (STRICTLY FOLLOW):
+      Calculate the 'overallScore' (0-100) based on this 6-point weighted formula:
+      
+      1. Fundamentals (30%): EPS, ROE, Revenue Growth, Dividend Yield.
+      2. Technicals (20%): MA Lines, KD, RSI, MACD trend.
+      3. Chips (Institutional) (15%): Foreign Investor & Investment Trust buying/selling.
+      4. Industry & Macro (15%): 
+         - Is the sector (e.g., AI, Shipping, Finance) currently trending UP or DOWN? 
+         - Is the global macro environment favorable? 
+         - (Score > 80 if sector is Hot; < 40 if sector is facing headwinds).
+      5. Retail Indicators (10%) [CONTRARIAN]: 
+         - High Financing Increase / High Retail Buy -> NEGATIVE Score.
+         - Decreasing Financing / Retail Sell -> POSITIVE Score.
+      6. Market Sentiment/News (10%): Short-term news impact.
       
       REQUIREMENTS:
       - All text must be Traditional Chinese (繁體中文).
-      - Score 0-100. Trend: BULLISH, BEARISH, or NEUTRAL.
+      - Risk Analysis: Specifically explain if the score is dragged down by short-term factors, retail crowding, or bad industry trends.
     `;
 
     const config: any = {

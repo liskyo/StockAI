@@ -1,43 +1,25 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { AIAnalysisResult, DashboardData, Source, StockPreview } from "../types";
 
-declare const __API_KEYS__: string[];
-declare const __API_KEY__: string;
+const apiKey = process.env.API_KEY || '';
+const ai = new GoogleGenAI({ apiKey });
 
-// Module-level counter for Round-Robin rotation
-let keyIndexCounter = 0;
+const CACHE_KEY = 'stock_winner_dashboard_cache_v3';
 
-const getAI = () => {
-  // Vite replaces __API_KEYS__ with the literal array at build time
-  const envKeys = (typeof __API_KEYS__ !== 'undefined' ? __API_KEYS__ : []);
-
-  const validKeys = Array.isArray(envKeys) && envKeys.length > 0
-    ? envKeys
-    : [(typeof __API_KEY__ !== 'undefined' ? __API_KEY__ : '')].filter(Boolean);
-
-  console.log(`[StockAI] Debug - Loaded ${validKeys.length} API Keys`);
-
-  // Round-Robin Selection
-  const currentIndex = keyIndexCounter % validKeys.length;
-  const apiKey = validKeys[currentIndex];
-  keyIndexCounter++; // Increment for next call
-
-  if (!apiKey) {
-    console.error("[StockAI] CRITICAL ERROR: No Valid API Key found. Env vars might be missing.");
-  } else {
-    // Log masked key for verification (first 4 chars and last 4 chars)
-    console.log(`[StockAI] Using Key Index ${currentIndex} (Starts with: ${apiKey.substring(0, 4)}... Ends with: ...${apiKey.slice(-4)})`);
-  }
-
-  return new GoogleGenAI({ apiKey });
+// Helper to determine the "data period"
+// The cycle refreshes at 12:00 PM daily.
+// Any time between Day N 12:00 PM and Day N+1 11:59 AM belongs to the same period.
+const getCachePeriodId = (timestamp: number): string => {
+  const date = new Date(timestamp);
+  // Subtract 12 hours. 
+  // If time is >= 12:00, it stays in current day.
+  // If time is < 12:00, it goes to previous day.
+  // The resulting date string uniquely identifies the period.
+  date.setHours(date.getHours() - 12);
+  return date.toDateString();
 };
 
-// Update cache key to invalidate potentially corrupted cache
-const CACHE_KEY = 'stock_winner_dashboard_cache_v3';
-const CACHE_DURATION = 15 * 60 * 1000; // 15 Minutes in milliseconds
-
 // --- Shared Schemas ---
-
 const stockPreviewSchema: Schema = {
   type: Type.OBJECT,
   properties: {
@@ -50,17 +32,15 @@ const stockPreviewSchema: Schema = {
   required: ["symbol", "name", "price", "changePercent", "reason"]
 };
 
-// --- Analysis Schema ---
-
 const analysisSchema: Schema = {
   type: Type.OBJECT,
   properties: {
     symbol: { type: Type.STRING },
     name: { type: Type.STRING },
-    currentPrice: { type: Type.NUMBER, description: "Current real-time stock price in TWD" },
-    change: { type: Type.NUMBER, description: "Price change value" },
-    changePercent: { type: Type.NUMBER, description: "Price change percentage" },
-    overallScore: { type: Type.NUMBER, description: "Overall score 0-100" },
+    currentPrice: { type: Type.NUMBER },
+    change: { type: Type.NUMBER },
+    changePercent: { type: Type.NUMBER },
+    overallScore: { type: Type.NUMBER },
     trend: { type: Type.STRING, enum: ["BULLISH", "BEARISH", "NEUTRAL"] },
     fundamental: {
       type: Type.OBJECT,
@@ -84,7 +64,7 @@ const analysisSchema: Schema = {
       type: Type.OBJECT,
       properties: {
         score: { type: Type.NUMBER },
-        summary: { type: Type.STRING, description: "Institutional investor analysis" },
+        summary: { type: Type.STRING },
         details: { type: Type.ARRAY, items: { type: Type.STRING } }
       },
       required: ["score", "summary", "details"]
@@ -92,8 +72,8 @@ const analysisSchema: Schema = {
     marketSentiment: {
       type: Type.OBJECT,
       properties: {
-        score: { type: Type.NUMBER, description: "0 (Extreme Fear) to 100 (Extreme Greed)" },
-        summary: { type: Type.STRING, description: "Analysis of news and social media sentiment" },
+        score: { type: Type.NUMBER },
+        summary: { type: Type.STRING },
         details: { type: Type.ARRAY, items: { type: Type.STRING } }
       },
       required: ["score", "summary", "details"]
@@ -101,8 +81,8 @@ const analysisSchema: Schema = {
     retail: {
       type: Type.OBJECT,
       properties: {
-        score: { type: Type.NUMBER, description: "Safety score (High means low retail crowding/safe financing levels)" },
-        summary: { type: Type.STRING, description: "Analysis of Financing (融資) and Short Selling (融券)" },
+        score: { type: Type.NUMBER },
+        summary: { type: Type.STRING },
         details: { type: Type.ARRAY, items: { type: Type.STRING } }
       },
       required: ["score", "summary", "details"]
@@ -115,7 +95,7 @@ const analysisSchema: Schema = {
         entryPriceHigh: { type: Type.NUMBER },
         targetPrice: { type: Type.NUMBER },
         stopLoss: { type: Type.NUMBER },
-        probability: { type: Type.NUMBER, description: "Success probability percentage 0-100" },
+        probability: { type: Type.NUMBER },
         timeframe: { type: Type.STRING }
       },
       required: ["action", "entryPriceLow", "entryPriceHigh", "targetPrice", "stopLoss", "probability", "timeframe"]
@@ -124,8 +104,6 @@ const analysisSchema: Schema = {
   },
   required: ["symbol", "name", "currentPrice", "change", "changePercent", "overallScore", "trend", "fundamental", "technical", "chips", "marketSentiment", "retail", "tradeSetup", "riskAnalysis"]
 };
-
-// --- Dashboard Schemas ---
 
 const dashboardListsSchema: Schema = {
   type: Type.OBJECT,
@@ -159,343 +137,109 @@ const strategiesSchema: Schema = {
   }
 };
 
-// Hardcoded Leading Stocks (權值股) for Instant Loading
-const staticLeadingStocks: StockPreview[] = [
-  { symbol: '2330', name: '台積電', price: '估算中...', changePercent: 0, reason: '半導體龍頭' },
-  { symbol: '2317', name: '鴻海', price: '估算中...', changePercent: 0, reason: '電子代工龍頭' },
-  { symbol: '2454', name: '聯發科', price: '估算中...', changePercent: 0, reason: 'IC設計龍頭' },
-  { symbol: '2308', name: '台達電', price: '估算中...', changePercent: 0, reason: '電源管理龍頭' },
-  { symbol: '2382', name: '廣達', price: '估算中...', changePercent: 0, reason: 'AI伺服器龍頭' }
-];
-
-// Deep Analysis uses PRO model for reasoning
-export const analyzeStock = async (query: string): Promise<AIAnalysisResult> => {
+export const analyzeStock = async (query: string, mode: 'flash' | 'pro' = 'flash'): Promise<AIAnalysisResult> => {
   try {
     const prompt = `
-      Act as a professional financial analyst for the Taiwan Stock Market (TWSE/TPEX).
+      Act as a professional financial analyst for the Taiwan Stock Market.
       Target Stock: "${query}"
       
       TASK:
-      1. USE GOOGLE SEARCH to find the LATEST REAL-TIME PRICE, Change, and Change% for this stock.
-      2. Analyze **Fundamental**, **Technical**, and **Chips (Institutional)** status.
-      3. **Market Sentiment**: Search for recent news headlines, and discussions on PTT Stock board / Dcard / Mobile01 to gauge investor sentiment (Fear vs Greed).
-      4. **Retail Indicators**: Search for "融資" (Margin Buying) and "融券" (Short Selling) trends. High margin balance is usually negative (unstable chips).
+      1. USE GOOGLE SEARCH for real-time price, news, and institutional data.
+      2. Analyze Fundamental, Technical, Chips, Market Sentiment, and Retail Indicators.
       
       REQUIREMENTS:
-      - Currency: TWD.
-      - If searching finds multiple prices, use the most recent one.
-      - **CRITICAL**: All text output (Name, Summary, Details, Risk Analysis) MUST be in **Traditional Chinese (繁體中文)**.
-      - **FORMAT**: Return ONLY a valid, raw JSON object matching the schema. Do NOT use Markdown code blocks (\`\`\`json).
-      - **IMPORTANT**: Your response must be a single JSON object having keys: "symbol", "name", "currentPrice", "change", "changePercent", "overallScore", "trend", "fundamental", "technical", "chips", "marketSentiment", "retail", "tradeSetup", "riskAnalysis".
-      
-      SCORING GUIDE:
-      - Sentiment Score: > 80(Overheated / Greed), <20 (Panic / Fear).
-      - Retail Score: Higher is better(meaning chips are stable, financing is decreasing or low).Low score means high retail crowding(high financing).
-
-      OUTPUT:
-    - JSON object matching the schema.
+      - All text must be Traditional Chinese (繁體中文).
+      - Score 0-100. Trend: BULLISH, BEARISH, or NEUTRAL.
     `;
 
-    // Models to try in order (User requested 2.5-flash first)
-    const models = ["gemini-2.5-flash", "gemini-2.0-flash-exp"];
-
-    // Retry logic: Try each model with key rotation
-    const maxRetriesPerModel = 5;
-    let lastError;
-
-    // Helper to clean JSON string from markdown
-    const parseCleanJSON = (text: string): any => {
-      try {
-        const cleanText = text.replace(/```json/g, '').replace(/```/g, '').trim();
-        return JSON.parse(cleanText);
-      } catch (e) {
-        throw new Error("Failed to parse AI JSON response: " + e.message);
-      }
+    const config: any = {
+      tools: [{googleSearch: {}}],
+      responseMimeType: "application/json",
+      responseSchema: analysisSchema,
     };
 
-    for (const model of models) {
-      console.log(`[StockAI] Trying Analysis with Model: ${model}`);
-
-      for (let attempt = 0; attempt < maxRetriesPerModel; attempt++) {
-        try {
-          const ai = getAI(); // Rotation happens here
-
-          const response = await ai.models.generateContent({
-            model: model,
-            contents: prompt,
-            config: {
-              tools: [{ googleSearch: {} }],
-              // REMOVE strict JSON enforcement
-            }
-          });
-
-          if (!response.text) {
-            console.warn(`[StockAI] Empty response from ${model}`);
-            throw new Error("No response from AI");
-          }
-
-          // DEBUG: Log the raw text to see what the AI is actually saying
-          console.log(`[StockAI] Raw AI Response (${model}):`, response.text);
-
-          const rawData = parseCleanJSON(response.text);
-
-          // Normalize Data Helper (Fixes Schema Mismatch from AI)
-          const normalizeDetails = (details: any): string[] => {
-            if (Array.isArray(details)) return details.map(String);
-            if (typeof details === 'object' && details !== null) {
-              return Object.entries(details).map(([k, v]) => `${k}: ${v}`);
-            }
-            return [String(details || '')];
-          };
-
-          const normalizeRisk = (risk: any): string => {
-            if (typeof risk === 'string') return risk;
-            if (Array.isArray(risk)) return risk.join(' ');
-
-            if (typeof risk === 'object' && risk !== null) {
-              if (risk.keyRisks) {
-                return Array.isArray(risk.keyRisks) ? risk.keyRisks.join(' ') : String(risk.keyRisks);
-              }
-              if (risk.summary) {
-                return String(risk.summary);
-              }
-            }
-            return JSON.stringify(risk);
-          }
-
-          const normalizeTradeSetup = (setup: any, currentPrice: number) => {
-            // Default "HOLD" setup
-            const defaultSetup = {
-              action: "HOLD",
-              entryPriceLow: 0,
-              entryPriceHigh: 0,
-              targetPrice: 0,
-              stopLoss: 0,
-              probability: 50,
-              timeframe: "1-2 Weeks"
-            };
-
-            if (!setup) return defaultSetup;
-
-            // If AI returned structured data, try to use it with fallbacks
-            if (typeof setup === 'object') {
-              return {
-                action: ["BUY", "SELL", "HOLD"].includes(setup.action) ? setup.action : "HOLD",
-                entryPriceLow: Number(setup.entryPriceLow) || currentPrice,
-                entryPriceHigh: Number(setup.entryPriceHigh) || currentPrice,
-                targetPrice: Number(setup.targetPrice) || (currentPrice * 1.1),
-                stopLoss: Number(setup.stopLoss) || (currentPrice * 0.9),
-                probability: Number(setup.probability) || 60,
-                timeframe: setup.timeframe || "1-4 Weeks"
-              };
-            }
-
-            // If it's just a text string (AI sometimes does this), return default
-            return defaultSetup;
-          };
-
-          const data: AIAnalysisResult = {
-            ...rawData,
-            fundamental: {
-              ...rawData.fundamental,
-              details: normalizeDetails(rawData.fundamental?.details)
-            },
-            technical: {
-              ...rawData.technical,
-              details: normalizeDetails(rawData.technical?.details)
-            },
-            chips: {
-              ...rawData.chips,
-              details: normalizeDetails(rawData.chips?.details)
-            },
-            marketSentiment: {
-              ...rawData.marketSentiment,
-              details: normalizeDetails(rawData.marketSentiment?.details)
-            },
-            retail: {
-              ...rawData.retail,
-              details: normalizeDetails(rawData.retail?.details)
-            },
-            tradeSetup: normalizeTradeSetup(rawData.tradeSetup, rawData.currentPrice || 0),
-            riskAnalysis: normalizeRisk(rawData.riskAnalysis)
-          };
-          // Basic validation to ensure it's not empty garbage
-          if (!data.symbol && !data.name) {
-            console.error("[StockAI] Invalid JSON content:", data);
-            throw new Error("AI returned invalid/empty JSON data (Missing symbol/name)");
-          }
-
-          data.timestamp = new Date().toLocaleString('zh-TW');
-
-          const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
-          if (chunks) {
-            data.sources = chunks
-              .map((c: any) => c.web)
-              .filter((w: any) => w !== undefined)
-              .map((w: any) => ({ title: w.title || 'Source', uri: w.uri || '#' }));
-          }
-
-          return data; // Success!
-
-        } catch (error: any) {
-          console.warn(`[StockAI] ${model} Attempt ${attempt + 1} failed:`, error.message);
-          lastError = error;
-
-          // Exponential Backoff: 1s, 2s, 4s, 8s...
-          const delay = Math.pow(2, attempt) * 1000;
-          await new Promise(r => setTimeout(r, delay));
-        }
-      }
+    if (mode === 'pro') {
+      config.thinkingConfig = { thinkingBudget: 16384 }; // Enable deep reasoning for Pro
     }
 
-    throw lastError || new Error("All API attempts failed across all models.");
+    const response = await ai.models.generateContent({
+      model: mode === 'pro' ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview',
+      contents: prompt,
+      config: config
+    });
+
+    if (!response.text) throw new Error("No response");
+
+    const data = JSON.parse(response.text) as AIAnalysisResult;
+    data.timestamp = new Date().toLocaleString('zh-TW');
+
+    const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
+    if (chunks) {
+        data.sources = chunks
+            .map((c: any) => c.web)
+            .filter((w: any) => w !== undefined)
+            .map((w: any) => ({ title: w.title || 'Source', uri: w.uri || '#' }));
+    }
+    
+    return data;
   } catch (error) {
     console.error("Analysis failed:", error);
     throw error;
   }
 };
 
-// Dashboard uses FLASH model + Parallel Execution for speed + Local Caching
 export const getDashboardData = async (): Promise<DashboardData> => {
+    try {
+        const cached = localStorage.getItem(CACHE_KEY);
+        if (cached) {
+            const { timestamp, data } = JSON.parse(cached);
+            
+            // Check if cache is still valid based on 12:00 PM cutoff
+            const currentPeriod = getCachePeriodId(Date.now());
+            const cachedPeriod = getCachePeriodId(timestamp);
 
-  // 1. CHECK CACHE
-  try {
-    const cached = localStorage.getItem(CACHE_KEY);
-    if (cached) {
-      const { timestamp, data } = JSON.parse(cached);
-      const now = Date.now();
-      // If cache is valid (less than CACHE_DURATION old)
-      if (now - timestamp < CACHE_DURATION) {
-        console.log("Using Cached Dashboard Data");
-        return data;
-      }
-    }
-  } catch (e) {
-    console.warn("Cache parsing failed", e);
-  }
-
-  // 2. Define Prompts for Parallel Execution
-
-  // Request A: Standard Lists (Yahoo/CMoney)
-  const listsPrompt = `
-        Act as a TWSE Expert. Use Google Search to fetch data from:
-        - Yahoo Rank: https://tw.stock.yahoo.com/rank/yield (High Dividend), https://tw.stock.yahoo.com/rank/volume
-        - CMoney Institutional: https://www.cmoney.tw/finance/f00062.aspx
-        
-        TASK: Return 5 arrays of stocks (3-5 items each).
-        1. "trending": Yahoo Popular Volume (熱門成交).
-        2. "technical": Yahoo Top Gainers (強勢漲幅).
-        3. "chips": CMoney Institutional Buying (法人買超).
-        4. "fundamental": High Revenue Growth (營收成長).
-        5. "dividend": Yahoo High Dividend Yield (高殖利率).
-
-        REQUIREMENTS:
-        - **ALL TEXT OUTPUT MUST BE IN TRADITIONAL CHINESE (繁體中文).**
-        - Ensure "dividend" list is populated.
-        - If exact data is missing, infer from top search results.
-
-        Output JSON matching schema.
-    `;
-
-  // Request B: Dynamic Strategies (Hot Topics)
-  const strategiesPrompt = `
-        Act as a TWSE Expert. Search for "台股 熱門族群", "主流 概念股".
-        Identify 3 CURRENT HOT THEMES (e.g. CoWoS, Robot, Energy, Military).
-        
-        LANGUAGE REQUIREMENT:
-        - **ALL TEXT OUTPUT MUST BE IN TRADITIONAL CHINESE (繁體中文).**
-        
-        Output JSON matching schema.
-    `;
-
-  try {
-    const maxRetries = 5;
-    let listsResponse, strategiesResponse;
-
-    // Helper to fetch with retry
-    // Helper to fetch with retry
-    // Helper to fetch with retry and model fallback
-    const fetchWithRetry = async (primaryModel: string, prompt: string) => {
-      const fallbackModel = "gemini-2.0-flash-exp";
-      const models = primaryModel === fallbackModel ? [primaryModel] : [primaryModel, fallbackModel];
-
-      let lastErr;
-
-      for (const model of models) {
-        for (let i = 0; i < maxRetries; i++) {
-          try {
-            const ai = getAI();
-            const res = await ai.models.generateContent({
-              model: model,
-              contents: prompt + "\nRETURN ONLY RAW JSON. NO MARKDOWN.",
-              config: { tools: [{ googleSearch: {} }] }
-            });
-
-            if (!res.text) throw new Error(`Empty response from ${model}`);
-
-            const cleanText = res.text.replace(/```json/g, '').replace(/```/g, '').trim();
-            return JSON.parse(cleanText);
-
-          } catch (e: any) {
-            console.warn(`[StockAI] Dashboard (${model}) attempt ${i + 1} failed:`, e.message);
-            lastErr = e;
-            // Exponential Backoff: 1s, 2s, 4s...
-            const delay = Math.pow(2, i) * 1000;
-            await new Promise(r => setTimeout(r, delay));
-          }
+            if (currentPeriod === cachedPeriod) {
+                return data;
+            }
         }
-      }
-      throw lastErr;
-    };
-
-    // Parallel Request using Primary Model (2.5-flash) with fallback
-    const [listsData, strategiesData] = await Promise.all([
-      fetchWithRetry("gemini-2.5-flash", listsPrompt),
-      fetchWithRetry("gemini-2.5-flash", strategiesPrompt)
-    ]);
-
-    // Parsing is now done inside fetchWithRetry, so listsData IS the object.
-    // Ensure fallback if somehow undefined
-    const validListsData = listsData || {};
-    const validStrategiesData = strategiesData || {};
-
-    const safeList = (list: any[]) => Array.isArray(list) ? list : [];
-
-    const result: DashboardData = {
-      leading: staticLeadingStocks,
-      trending: safeList(validListsData.trending),
-      fundamental: safeList(validListsData.fundamental),
-      technical: safeList(validListsData.technical),
-      chips: safeList(validListsData.chips),
-      dividend: safeList(validListsData.dividend),
-      strategies: safeList(validStrategiesData.strategies)
-    };
-
-    // SAVE TO CACHE
-    localStorage.setItem(CACHE_KEY, JSON.stringify({
-      timestamp: Date.now(),
-      data: result
-    }));
-
-    return result;
-
-  } catch (e) {
-    console.error("Dashboard fetch failed", e);
-    // Fallback to cache if request fails, even if expired
-    const cached = localStorage.getItem(CACHE_KEY);
-    if (cached) {
-      return JSON.parse(cached).data;
+    } catch (e) {
+        console.error("Cache read error", e);
     }
 
-    // Emergency fallback data
-    return {
-      leading: staticLeadingStocks,
-      trending: [{ symbol: '2330', name: '台積電', price: '1000', changePercent: 0, reason: '系統維護中' }],
-      fundamental: [],
-      technical: [],
-      chips: [],
-      dividend: [],
-      strategies: []
-    };
-  }
+    const listsPrompt = `Fetch standard market ranking lists for TWSE. Traditional Chinese.`;
+    const strategiesPrompt = `Identify 3 current hot market themes/concepts for TWSE. Traditional Chinese.`;
+
+    try {
+        const [listsResponse, strategiesResponse] = await Promise.all([
+            ai.models.generateContent({
+                model: "gemini-3-flash-preview",
+                contents: listsPrompt,
+                config: { tools: [{googleSearch: {}}], responseMimeType: "application/json", responseSchema: dashboardListsSchema }
+            }),
+            ai.models.generateContent({
+                model: "gemini-3-flash-preview",
+                contents: strategiesPrompt,
+                config: { tools: [{googleSearch: {}}], responseMimeType: "application/json", responseSchema: strategiesSchema }
+            })
+        ]);
+
+        const listsData = listsResponse.text ? JSON.parse(listsResponse.text) : {};
+        const strategiesData = strategiesResponse.text ? JSON.parse(strategiesResponse.text) : {};
+
+        const result: DashboardData = {
+            trending: listsData.trending || [],
+            fundamental: listsData.fundamental || [],
+            technical: listsData.technical || [],
+            chips: listsData.chips || [],
+            dividend: listsData.dividend || [],
+            strategies: strategiesData.strategies || []
+        };
+
+        localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: result }));
+        return result;
+    } catch (e) {
+        // Fallback to cache if network fails, even if expired
+        const cached = localStorage.getItem(CACHE_KEY);
+        return cached ? JSON.parse(cached).data : { trending: [], fundamental: [], technical: [], chips: [], dividend: [], strategies: [] };
+    }
 }

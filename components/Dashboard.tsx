@@ -14,21 +14,35 @@ import {
   Globe,
   Lightbulb,
   Sparkles,
-  Percent
+  Percent,
+  Clock
 } from 'lucide-react';
 
 interface DashboardProps {
   onSelectStock: (symbol: string) => void;
+  history?: StockPreview[];
 }
 
 // Combine standard tabs with string for dynamic strategy IDs
-type TabType = 'trending' | 'fundamental' | 'technical' | 'chips' | 'dividend' | string;
+type TabType = 'trending' | 'fundamental' | 'technical' | 'chips' | 'dividend' | 'history' | string;
 
-const Dashboard: React.FC<DashboardProps> = ({ onSelectStock }) => {
+const STORAGE_KEY_TAB = 'sw_dashboard_active_tab';
+
+const Dashboard: React.FC<DashboardProps> = ({ onSelectStock, history = [] }) => {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<TabType>('trending');
+  
+  // Initialize tab from local storage or default to 'trending'
+  const [activeTab, setActiveTab] = useState<TabType>(() => {
+    return localStorage.getItem(STORAGE_KEY_TAB) || 'trending';
+  });
+  
   const [localSearch, setLocalSearch] = useState('');
+
+  // Persist active tab changes
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY_TAB, activeTab);
+  }, [activeTab]);
 
   useEffect(() => {
     const loadMarket = async () => {
@@ -52,6 +66,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectStock }) => {
   };
 
   const standardTabs: { id: TabType; label: string; icon: React.ReactNode; color: string }[] = [
+    { id: 'history', label: '最近搜尋', icon: <Clock className="w-4 h-4" />, color: 'text-gray-300' },
     { id: 'trending', label: '熱門 (Yahoo)', icon: <Flame className="w-4 h-4" />, color: 'text-orange-500' },
     { id: 'fundamental', label: '績優 (CMoney)', icon: <DollarSign className="w-4 h-4" />, color: 'text-emerald-500' },
     { id: 'technical', label: '強勢 (Yahoo)', icon: <BarChart2 className="w-4 h-4" />, color: 'text-blue-500' },
@@ -61,6 +76,8 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectStock }) => {
 
   // Helper to determine what list to show
   const getCurrentList = (): StockPreview[] => {
+      if (activeTab === 'history') return history;
+      
       if (!data) return [];
       
       // Check standard tabs
@@ -132,13 +149,15 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectStock }) => {
                     <ListFilter className="w-5 h-5 text-neon-blue" />
                     {getTabTitle(activeTab)}
                 </h3>
-                <span className="text-[10px] text-gray-400 bg-slate-900 px-2 py-1 rounded border border-slate-700 flex items-center gap-1">
-                    <Globe size={10} className="text-neon-green"/>
-                    AI 即時聯網搜尋中
-                 </span>
+                {activeTab !== 'history' && (
+                  <span className="text-[10px] text-gray-400 bg-slate-900 px-2 py-1 rounded border border-slate-700 flex items-center gap-1">
+                      <Globe size={10} className="text-neon-green"/>
+                      AI 即時聯網搜尋中
+                  </span>
+                )}
              </div>
 
-            {loading ? (
+            {loading && activeTab !== 'history' ? (
                 <div className="space-y-4">
                   <div className="flex items-center justify-center py-10 text-neon-blue animate-pulse">
                      正在連結 Yahoo/CMoney 數據庫分析熱門題材...
@@ -149,7 +168,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectStock }) => {
                 <div className="space-y-3">
                 {currentList?.length === 0 && (
                     <div className="text-gray-500 text-center py-10 border border-dashed border-slate-700 rounded-xl">
-                        AI 暫時無法從來源獲取此列表，請稍後再試。
+                        {activeTab === 'history' ? '尚無搜尋紀錄' : 'AI 暫時無法從來源獲取此列表，請稍後再試。'}
                     </div>
                 )}
                 {currentList?.map((stock, index) => (
@@ -170,7 +189,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectStock }) => {
                             <span className="text-gray-400 text-sm">{stock.name}</span>
                         </div>
                         <div className="text-xs text-gray-400 mt-1 flex items-center gap-1">
-                            <span className="w-1.5 h-1.5 rounded-full bg-gray-500 group-hover:bg-neon-blue"></span>
+                            <span className={`w-1.5 h-1.5 rounded-full ${activeTab === 'history' ? 'bg-gray-400' : 'bg-gray-500 group-hover:bg-neon-blue'}`}></span>
                             {stock.reason}
                         </div>
                         </div>

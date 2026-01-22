@@ -148,21 +148,37 @@ const strategiesSchema: Schema = {
 
 export const analyzeStock = async (query: string, mode: 'flash' | 'pro' = 'flash'): Promise<AIAnalysisResult> => {
   try {
-    const now = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false });
+    // Manually construct time string to be absolutely safe across environments
+    // Format: YYYY/MM/DD HH:MM:SS
+    const dateObj = new Date();
+    const year = dateObj.getFullYear();
+    const month = String(dateObj.getMonth() + 1).padStart(2, '0');
+    const day = String(dateObj.getDate()).padStart(2, '0');
+    const hours = String(dateObj.getHours()).padStart(2, '0');
+    const minutes = String(dateObj.getMinutes()).padStart(2, '0');
+    const seconds = String(dateObj.getSeconds()).padStart(2, '0');
     
-    // Explicitly add "即時股價" (Real-time price) to the search context for the model
+    const now = `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;
+    const timeStr = `${hours}:${minutes}:${seconds}`;
+    
+    const currentHour = dateObj.getHours();
+    const isMarketOpen = currentHour >= 9 && currentHour <= 13;
+
+    // Explicitly add "即時股價" (Real-time price) and current time to the search context
     const prompt = `
       Current System Time (Taiwan): ${now}
       Target Stock: "${query}"
       
-      **CRITICAL INSTRUCTION FOR PRICE DATA:**
-      1. You MUST use Google Search with the query: "${query} 即時股價" or "${query} stock price live".
-      2. **VERIFY THE TIMESTAMP:** Ensure the price you find is from TODAY (${now.split(' ')[0]}).
-      3. **DO NOT** use the "Previous Close" (昨日收盤) as the "currentPrice". 
-      4. Look for the large, bold number indicating the specific **current trading price**.
+      **CRITICAL INSTRUCTION FOR PRICE UPDATE (AUTO-REFRESH MODE):**
+      1. You are running in a per-minute auto-refresh cycle.
+      2. **SEARCH QUERY**: USE "${query} 股價 live ${timeStr}" or "TPE:${query.replace(/\D/g,'')} stock price".
+      3. **VALIDATION**: 
+         - If market is OPEN (09:00 - 13:30), the price MUST be changing.
+         - Do NOT return the "Previous Close" (昨日收盤) as "currentPrice".
+         - Look for "Last Updated: ${timeStr.substring(0,4)}0" (nearest 10 mins) or similar timestamps in search results.
       
       TASK:
-      1. Get the REAL-TIME price, change, and percentage.
+      1. Get the **EXACT LIVE PRICE** right now.
       2. Analyze Fundamental, Technical, Chips, Industry/Macro, Market Sentiment, and Retail Indicators.
       
       CRITICAL SCORING RULES (STRICTLY FOLLOW):

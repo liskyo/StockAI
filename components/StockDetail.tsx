@@ -1,10 +1,10 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { AIAnalysisResult } from '../types';
 import RadialChart from './RadialChart';
 import { 
   Target, 
   ShieldAlert, 
-  DollarSign,
+  DollarSign, 
   BarChart2,
   Users,
   ExternalLink,
@@ -13,15 +13,17 @@ import {
   MessageCircleHeart,
   User,
   Scale,
-  Globe
+  Globe,
+  RefreshCw
 } from 'lucide-react';
 
 interface StockDetailProps {
   data: AIAnalysisResult;
   onBack: () => void;
+  onRefresh: (symbol: string) => void;
 }
 
-const StockDetail: React.FC<StockDetailProps> = ({ data, onBack }) => {
+const StockDetail: React.FC<StockDetailProps> = ({ data, onBack, onRefresh }) => {
   const isBullish = data.trend === 'BULLISH';
   const isBearish = data.trend === 'BEARISH';
   const themeColor = isBullish ? 'text-neon-green' : isBearish ? 'text-neon-red' : 'text-gray-400';
@@ -30,6 +32,14 @@ const StockDetail: React.FC<StockDetailProps> = ({ data, onBack }) => {
   const isPositive = (data.change || 0) > 0;
   const isNegative = (data.change || 0) < 0;
   const priceColor = isPositive ? 'text-neon-red' : isNegative ? 'text-neon-green' : 'text-white'; // TW market: Red is Up, Green is Down
+
+  // Auto-refresh every minute
+  useEffect(() => {
+    const timer = setInterval(() => {
+      onRefresh(data.symbol);
+    }, 60000); // 60 seconds
+    return () => clearInterval(timer);
+  }, [data.symbol, onRefresh]);
 
   return (
     <div className="animate-fade-in pb-10">
@@ -54,9 +64,15 @@ const StockDetail: React.FC<StockDetailProps> = ({ data, onBack }) => {
               </span>
             </div>
             <h2 className="text-xl text-gray-300 mt-1">{data.name}</h2>
-            <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
-                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
-                分析時間: {data.timestamp}
+            <p className="text-xs text-gray-500 mt-2 flex items-center gap-2">
+                <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-800/80 border border-slate-700">
+                  <span className="w-1.5 h-1.5 rounded-full bg-neon-green animate-pulse"></span>
+                  LIVE
+                </span>
+                <span className="flex items-center gap-1">
+                   <RefreshCw size={10} className="animate-spin-slow" />
+                   更新: {data.timestamp}
+                </span>
             </p>
           </div>
 

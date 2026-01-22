@@ -171,20 +171,35 @@ function App() {
     }
   };
 
-  const performAnalysis = async (query: string) => {
-    setStatus(AnalysisStatus.LOADING);
-    setAnalysisData(null);
-    setErrorMsg('');
+  const performAnalysis = async (query: string, isBackground = false) => {
+    // If NOT a background refresh, show loading screen and clear data
+    if (!isBackground) {
+        setStatus(AnalysisStatus.LOADING);
+        setAnalysisData(null);
+        setErrorMsg('');
+    }
+    
     setSearchQuery(query);
 
     try {
+      // In background mode, we might want to consider using 'flash' if 'pro' is too heavy?
+      // For now, respect the user's selected mode to maintain consistency of analysis depth.
       const data = await analyzeStock(query, analysisMode);
       setAnalysisData(data);
-      setStatus(AnalysisStatus.SUCCESS);
-      updateHistory(data); // 分析成功後加入歷史紀錄
+      
+      // If NOT background, set success status (background refresh keeps existing Success status)
+      if (!isBackground) {
+          setStatus(AnalysisStatus.SUCCESS);
+      }
+      
+      updateHistory(data); 
     } catch (err) {
-      setErrorMsg("AI 分析失敗，請稍後重試。如果是 Pro 模式，可能需要較長的處理時間。");
-      setStatus(AnalysisStatus.ERROR);
+      if (!isBackground) {
+          setErrorMsg("AI 分析失敗，請稍後重試。如果是 Pro 模式，可能需要較長的處理時間。");
+          setStatus(AnalysisStatus.ERROR);
+      } else {
+          console.error("Auto-refresh failed silently", err);
+      }
     }
   };
 
@@ -297,7 +312,7 @@ function App() {
                     </button>
                 </div>
              </div>
-             <Dashboard onSelectStock={performAnalysis} history={history} />
+             <Dashboard onSelectStock={(q) => performAnalysis(q)} history={history} />
           </div>
         )}
 
@@ -338,7 +353,11 @@ function App() {
         )}
 
         {status === AnalysisStatus.SUCCESS && analysisData && (
-          <StockDetail data={analysisData} onBack={handleBack} />
+          <StockDetail 
+            data={analysisData} 
+            onBack={handleBack} 
+            onRefresh={(query) => performAnalysis(query, true)} 
+          />
         )}
 
       </main>

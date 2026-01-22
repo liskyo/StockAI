@@ -148,12 +148,21 @@ const strategiesSchema: Schema = {
 
 export const analyzeStock = async (query: string, mode: 'flash' | 'pro' = 'flash'): Promise<AIAnalysisResult> => {
   try {
+    const now = new Date().toLocaleString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false });
+    
+    // Explicitly add "即時股價" (Real-time price) to the search context for the model
     const prompt = `
-      Act as a professional financial analyst for the Taiwan Stock Market.
+      Current System Time (Taiwan): ${now}
       Target Stock: "${query}"
       
+      **CRITICAL INSTRUCTION FOR PRICE DATA:**
+      1. You MUST use Google Search with the query: "${query} 即時股價" or "${query} stock price live".
+      2. **VERIFY THE TIMESTAMP:** Ensure the price you find is from TODAY (${now.split(' ')[0]}).
+      3. **DO NOT** use the "Previous Close" (昨日收盤) as the "currentPrice". 
+      4. Look for the large, bold number indicating the specific **current trading price**.
+      
       TASK:
-      1. USE GOOGLE SEARCH for real-time price, news, institutional data, retail financing status, and INDUSTRY SECTOR TRENDS.
+      1. Get the REAL-TIME price, change, and percentage.
       2. Analyze Fundamental, Technical, Chips, Industry/Macro, Market Sentiment, and Retail Indicators.
       
       CRITICAL SCORING RULES (STRICTLY FOLLOW):
@@ -195,7 +204,7 @@ export const analyzeStock = async (query: string, mode: 'flash' | 'pro' = 'flash
     if (!response.text) throw new Error("No response");
 
     const data = JSON.parse(response.text) as AIAnalysisResult;
-    data.timestamp = new Date().toLocaleString('zh-TW');
+    data.timestamp = now; // Use the captured time
 
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
     if (chunks) {

@@ -222,10 +222,22 @@ export const analyzeStock = async (query: string, mode: 'flash' | 'pro' = 'flash
       - If Day Trading Whales detected -> Add "🐋 隔日沖進駐 (短線賣壓)"
       - If Margin Debt High -> Add "📉 融資過高 (多殺多風險)"
 
+      **STRATEGY: LONG-ONLY (做多策略)**:
+      - This user ONLY plays LONG positions (Buy Low, Sell High). Do NOT suggest Shorting.
+      - **If TREND IS BEARISH**:
+        - Focus on **"Where is the Structural Support?"** (跌深反彈點/攤平點).
+        - Set 'entryPriceLow' and 'entryPriceHigh' to the major SUPPORT level below current price where users should "Average Down" (攤平).
+        - Set 'action' to **"HOLD"** (Meaning: Wait for price to drop to this level).
+        - **DO NOT** suggest 'SELL' unless the company is going bankrupt. If it's just a downtrend, suggest "Wait for Support".
+      - **If TREND IS BULLISH**:
+        - Focus on **"Breakout or Pullback Entry"**.
+        - Set 'action' to **"BUY"** (Enter Now).
+      
       **OUTPUT REQUIREMENTS**:
       - **currentPrice**: Must be the exact number found in Step 1.
-      - **change/changePercent**: Must match the real-time movement.
-      - **tradeSetup**: Provide realistic "Probability" and "Risk/Reward Ratio".
+      - **tradeSetup**: 
+         - **action**: 'BUY' (Aggressive Entry), 'HOLD' (Wait for Dip/Support), 'SELL' (Take Profit).
+         - **entryPriceLow/High**: The ideal price to start buying or averaging down.
       - **Language**: Traditional Chinese (繁體中文).
     `;
 

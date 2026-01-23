@@ -59,6 +59,14 @@ const StockDetail: React.FC<StockDetailProps> = ({ data, onBack, onRefresh }) =>
     return () => clearInterval(timer);
   }, [data.symbol, onRefresh, data.timestamp]);
 
+  // UI Helper for Action Text
+  const getActionText = (action: string) => {
+    if (action === 'BUY') return '積極買進';
+    if (action === 'HOLD') return '等待低接'; // Changed from '觀望' to imply Long strategy (Averaging down)
+    if (action === 'SELL') return '反彈減碼'; // Changed from '賣出'
+    return '中立';
+  };
+
   return (
     <div className="animate-fade-in pb-10">
       <button 
@@ -157,7 +165,7 @@ const StockDetail: React.FC<StockDetailProps> = ({ data, onBack, onRefresh }) =>
           <div className="flex items-center justify-between mb-6">
              <div className="flex items-center gap-2">
                 <Target className="w-5 h-5 text-neon-blue" />
-                <h3 className="text-lg font-bold text-white">智能交易策略 (Smart Setup)</h3>
+                <h3 className="text-lg font-bold text-white">多方操作策略 (Long Strategy)</h3>
              </div>
              <div className="px-3 py-1 bg-slate-800 rounded-full text-xs text-neon-blue border border-blue-500/30 font-mono">
                 AI 戰術建議
@@ -169,7 +177,7 @@ const StockDetail: React.FC<StockDetailProps> = ({ data, onBack, onRefresh }) =>
             <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
               <span className="text-xs text-gray-400 block mb-1">建議動作</span>
               <span className={`text-xl font-bold ${data.tradeSetup?.action === 'BUY' ? 'text-neon-green' : data.tradeSetup?.action === 'SELL' ? 'text-neon-red' : 'text-yellow-400'}`}>
-                {data.tradeSetup?.action === 'BUY' ? '買進' : data.tradeSetup?.action === 'SELL' ? '賣出' : '觀望'}
+                {getActionText(data.tradeSetup?.action)}
               </span>
             </div>
             <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
@@ -179,7 +187,7 @@ const StockDetail: React.FC<StockDetailProps> = ({ data, onBack, onRefresh }) =>
                </span>
             </div>
             <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 bg-blue-500/10 border-blue-500/30">
-               <span className="text-xs text-blue-300 block mb-1">進場 (Entry)</span>
+               <span className="text-xs text-blue-300 block mb-1">佈局/攤平 (Entry/Avg)</span>
                <span className="text-lg font-semibold text-white">
                  {Math.round(entryPrice * 100) / 100}
                </span>

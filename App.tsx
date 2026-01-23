@@ -180,11 +180,14 @@ function App() {
     }
     
     setSearchQuery(query);
+    
+    // FORCE FLASH MODE FOR BACKGROUND AUTO-REFRESH
+    // This prevents Pro mode (2 RPM limit) from exhaustion during background updates.
+    // User only needs price updates in background, not deep reasoning re-calculation.
+    const effectiveMode = isBackground ? 'flash' : analysisMode;
 
     try {
-      // In background mode, we might want to consider using 'flash' if 'pro' is too heavy?
-      // For now, respect the user's selected mode to maintain consistency of analysis depth.
-      const data = await analyzeStock(query, analysisMode);
+      const data = await analyzeStock(query, effectiveMode);
       setAnalysisData(data);
       
       // If NOT background, set success status (background refresh keeps existing Success status)

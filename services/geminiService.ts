@@ -7,17 +7,33 @@ const ai = new GoogleGenAI({ apiKey });
 const CACHE_KEY = 'stock_winner_dashboard_cache_v3';
 
 // Helper to determine the "data period"
-// The cycle refreshes at 12:00 PM daily.
-// Any time between Day N 12:00 PM and Day N+1 11:59 AM belongs to the same period.
 const getCachePeriodId = (timestamp: number): string => {
   const date = new Date(timestamp);
-  // Subtract 12 hours. 
-  // If time is >= 12:00, it stays in current day.
-  // If time is < 12:00, it goes to previous day.
-  // The resulting date string uniquely identifies the period.
   date.setHours(date.getHours() - 12);
   return date.toDateString();
 };
+
+// --- Retry Helper ---
+const retryWithBackoff = async <T>(fn: () => Promise<T>, retries = 5, delay = 4000): Promise<T> => {
+    try {
+        return await fn();
+    } catch (err: any) {
+        const isRateLimit = 
+            err?.status === 429 || 
+            err?.code === 429 || 
+            err?.statusText === 'RESOURCE_EXHAUSTED' ||
+            (err?.message && (err.message.includes('429') || err.message.includes('quota'))) ||
+            err?.error?.code === 429 || 
+            err?.error?.status === 'RESOURCE_EXHAUSTED';
+            
+        if (retries > 0 && isRateLimit) {
+            console.warn(`Quota exceeded. Retrying in ${delay}ms... (${retries} retries left)`);
+            await new Promise(r => setTimeout(r, delay));
+            return retryWithBackoff(fn, retries - 1, delay * 2);
+        }
+        throw err;
+    }
+}
 
 // --- Shared Schemas ---
 const stockPreviewSchema: Schema = {
@@ -42,6 +58,7 @@ const analysisSchema: Schema = {
     changePercent: { type: Type.NUMBER },
     overallScore: { type: Type.NUMBER },
     trend: { type: Type.STRING, enum: ["BULLISH", "BEARISH", "NEUTRAL"] },
+    warningFlags: { type: Type.ARRAY, items: { type: Type.STRING } },
     fundamental: {
       type: Type.OBJECT,
       properties: {
@@ -105,13 +122,14 @@ const analysisSchema: Schema = {
         targetPrice: { type: Type.NUMBER },
         stopLoss: { type: Type.NUMBER },
         probability: { type: Type.NUMBER },
-        timeframe: { type: Type.STRING }
+        timeframe: { type: Type.STRING },
+        riskRewardRatio: { type: Type.STRING }
       },
-      required: ["action", "entryPriceLow", "entryPriceHigh", "targetPrice", "stopLoss", "probability", "timeframe"]
+      required: ["action", "entryPriceLow", "entryPriceHigh", "targetPrice", "stopLoss", "probability", "timeframe", "riskRewardRatio"]
     },
     riskAnalysis: { type: Type.STRING }
   },
-  required: ["symbol", "name", "currentPrice", "change", "changePercent", "overallScore", "trend", "fundamental", "technical", "chips", "industry", "marketSentiment", "retail", "tradeSetup", "riskAnalysis"]
+  required: ["symbol", "name", "currentPrice", "change", "changePercent", "overallScore", "trend", "warningFlags", "fundamental", "technical", "chips", "industry", "marketSentiment", "retail", "tradeSetup", "riskAnalysis"]
 };
 
 const dashboardListsSchema: Schema = {
@@ -148,8 +166,6 @@ const strategiesSchema: Schema = {
 
 export const analyzeStock = async (query: string, mode: 'flash' | 'pro' = 'flash'): Promise<AIAnalysisResult> => {
   try {
-    // Manually construct time string to be absolutely safe across environments
-    // Format: YYYY/MM/DD HH:MM:SS
     const dateObj = new Date();
     const year = dateObj.getFullYear();
     const month = String(dateObj.getMonth() + 1).padStart(2, '0');
@@ -159,46 +175,58 @@ export const analyzeStock = async (query: string, mode: 'flash' | 'pro' = 'flash
     const seconds = String(dateObj.getSeconds()).padStart(2, '0');
     
     const now = `${year}/${month}/${day} ${hours}:${minutes}:${seconds}`;
-    const timeStr = `${hours}:${minutes}:${seconds}`;
-    
-    const currentHour = dateObj.getHours();
-    const isMarketOpen = currentHour >= 9 && currentHour <= 13;
 
-    // Explicitly add "即時股價" (Real-time price) and current time to the search context
+    // Refined prompt to force Yahoo Finance / Google Finance specific searches
     const prompt = `
       Current System Time (Taiwan): ${now}
       Target Stock: "${query}"
+
+      **ROLE**: You are a VETERAN Taiwan Stock Market Analyst (20+ years experience).
+
+      **CRITICAL SEARCH INSTRUCTIONS (EXECUTE IN ORDER)**:
+      1. **REAL-TIME PRICE (HIGHEST PRIORITY)**: 
+         - Perform a search specifically for: "${query} 股價 Yahoo 奇摩股市".
+         - ALSO search for: "${query} stock price Google Finance".
+         - **EXTRACTION RULE**: Look for the large, bold numbers in the search result snippets. 
+         - If Taiwan Market is OPEN (09:00-13:30 GMT+8), find the "成交 (Last/Match)" price. 
+         - If Taiwan Market is CLOSED, find the "收盤 (Close)" price.
+         - **Do not** use prices from news articles older than 1 hour. Use the financial data snippet.
+
+      2. **CHIP INSIDER**: Search "${query} 隔日沖 券商", "${query} 主力籌碼", "${query} 凱基台北". 
+      3. **REGULATORY**: Search "${query} 處置股", "${query} 注意股".
+      4. **RETAIL**: Search "${query} 融資餘額".
+
+      **SCORING LOGIC (UPDATED)**:
+      Calculate 'overallScore' based on the following weighted formula. 
+      **IMPORTANT: Risk Alerts must strictly penalize specific categories.**
+
+      1. **Chips (Institutional) (30%)**: 
+         - **PENALTY RULE**: If "Day Trading Whales" (隔日沖) or "Institutional Selling" is detected, this score MUST be < 40.
       
-      **CRITICAL INSTRUCTION FOR PRICE UPDATE (AUTO-REFRESH MODE):**
-      1. You are running in a per-minute auto-refresh cycle.
-      2. **SEARCH QUERY**: USE "${query} 股價 live ${timeStr}" or "TPE:${query.replace(/\D/g,'')} stock price".
-      3. **VALIDATION**: 
-         - If market is OPEN (09:00 - 13:30), the price MUST be changing.
-         - Do NOT return the "Previous Close" (昨日收盤) as "currentPrice".
-         - Look for "Last Updated: ${timeStr.substring(0,4)}0" (nearest 10 mins) or similar timestamps in search results.
+      2. **Fundamentals (20%)**: EPS, Revenue Growth.
       
-      TASK:
-      1. Get the **EXACT LIVE PRICE** right now.
-      2. Analyze Fundamental, Technical, Chips, Industry/Macro, Market Sentiment, and Retail Indicators.
+      3. **Technicals (15%)**: 
+         - **PENALTY RULE**: If "Disposition Stock" (處置/注意股), volume is fake. Score MUST be < 50.
       
-      CRITICAL SCORING RULES (STRICTLY FOLLOW):
-      Calculate the 'overallScore' (0-100) based on this 6-point weighted formula:
-      
-      1. Fundamentals (30%): EPS, ROE, Revenue Growth, Dividend Yield.
-      2. Technicals (20%): MA Lines, KD, RSI, MACD trend.
-      3. Chips (Institutional) (15%): Foreign Investor & Investment Trust buying/selling.
-      4. Industry & Macro (15%): 
-         - Is the sector (e.g., AI, Shipping, Finance) currently trending UP or DOWN? 
-         - Is the global macro environment favorable? 
-         - (Score > 80 if sector is Hot; < 40 if sector is facing headwinds).
-      5. Retail Indicators (10%) [CONTRARIAN]: 
-         - High Financing Increase / High Retail Buy -> NEGATIVE Score.
-         - Decreasing Financing / Retail Sell -> POSITIVE Score.
-      6. Market Sentiment/News (10%): Short-term news impact.
-      
-      REQUIREMENTS:
-      - All text must be Traditional Chinese (繁體中文).
-      - Risk Analysis: Specifically explain if the score is dragged down by short-term factors, retail crowding, or bad industry trends.
+      4. **Industry (15%)**: Sector trend.
+
+      5. **Retail / Counter-Indicator (10%)**: 
+         - **PENALTY RULE**: If Margin Debt (融資) is high/increasing while price drops, score MUST be < 30.
+
+      6. **Market Sentiment (10%)**: 
+         - News impact, PTT/Forum discussion heat. 
+         - Good news = High score, Bad news = Low score.
+
+      **KILLER FLAGS (Populate 'warningFlags' array)**:
+      - If Disposition Stock -> Add "⚠️ 處置股票 (流動性風險)"
+      - If Day Trading Whales detected -> Add "🐋 隔日沖進駐 (短線賣壓)"
+      - If Margin Debt High -> Add "📉 融資過高 (多殺多風險)"
+
+      **OUTPUT REQUIREMENTS**:
+      - **currentPrice**: Must be the exact number found in Step 1.
+      - **change/changePercent**: Must match the real-time movement.
+      - **tradeSetup**: Provide realistic "Probability" and "Risk/Reward Ratio".
+      - **Language**: Traditional Chinese (繁體中文).
     `;
 
     const config: any = {
@@ -208,19 +236,21 @@ export const analyzeStock = async (query: string, mode: 'flash' | 'pro' = 'flash
     };
 
     if (mode === 'pro') {
-      config.thinkingConfig = { thinkingBudget: 16384 }; // Enable deep reasoning for Pro
+      config.thinkingConfig = { thinkingBudget: 16384 };
     }
 
-    const response = await ai.models.generateContent({
-      model: mode === 'pro' ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview',
-      contents: prompt,
-      config: config
-    });
+    const response = await retryWithBackoff(() => 
+      ai.models.generateContent({
+        model: mode === 'pro' ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview',
+        contents: prompt,
+        config: config
+      })
+    );
 
     if (!response.text) throw new Error("No response");
 
     const data = JSON.parse(response.text) as AIAnalysisResult;
-    data.timestamp = now; // Use the captured time
+    data.timestamp = now;
 
     const chunks = response.candidates?.[0]?.groundingMetadata?.groundingChunks;
     if (chunks) {
@@ -255,22 +285,36 @@ export const getDashboardData = async (): Promise<DashboardData> => {
         console.error("Cache read error", e);
     }
 
-    const listsPrompt = `Fetch standard market ranking lists for TWSE. Traditional Chinese.`;
+    // Force Yahoo Finance search for trending lists to get better price data accuracy in dashboard
+    const listsPrompt = `Fetch standard market ranking lists for TWSE (Taiwan Stock Exchange) from Yahoo Finance Taiwan (Yahoo 奇摩股市). 
+    I need: 
+    1. Trending/Volume Leaders (熱門)
+    2. Top Gainers (強勢)
+    3. High Dividend (高殖利率)
+    
+    For Fundamental and Chips, use general financial news knowledge.
+    Output in Traditional Chinese.`;
+    
     const strategiesPrompt = `Identify 3 current hot market themes/concepts for TWSE. Traditional Chinese.`;
 
     try {
-        const [listsResponse, strategiesResponse] = await Promise.all([
+        const listsResponse = await retryWithBackoff(() => 
             ai.models.generateContent({
                 model: "gemini-3-flash-preview",
                 contents: listsPrompt,
                 config: { tools: [{googleSearch: {}}], responseMimeType: "application/json", responseSchema: dashboardListsSchema }
-            }),
+            })
+        );
+
+        await new Promise(r => setTimeout(r, 1000));
+
+        const strategiesResponse = await retryWithBackoff(() => 
             ai.models.generateContent({
                 model: "gemini-3-flash-preview",
                 contents: strategiesPrompt,
                 config: { tools: [{googleSearch: {}}], responseMimeType: "application/json", responseSchema: strategiesSchema }
             })
-        ]);
+        );
 
         const listsData = listsResponse.text ? JSON.parse(listsResponse.text) : {};
         const strategiesData = strategiesResponse.text ? JSON.parse(strategiesResponse.text) : {};
@@ -287,7 +331,6 @@ export const getDashboardData = async (): Promise<DashboardData> => {
         localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: result }));
         return result;
     } catch (e) {
-        // Fallback to cache if network fails, even if expired
         const cached = localStorage.getItem(CACHE_KEY);
         return cached ? JSON.parse(cached).data : { trending: [], fundamental: [], technical: [], chips: [], dividend: [], strategies: [] };
     }

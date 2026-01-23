@@ -45,6 +45,7 @@ export interface TradeSetup {
   stopLoss: number;
   probability: number; // 0-100%
   timeframe: string; // e.g., "2-4 Weeks"
+  riskRewardRatio: string; // e.g. "1:3"
 }
 
 export interface Source {
@@ -65,6 +66,9 @@ export interface AIAnalysisResult {
   overallScore: number; // 0-100
   trend: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
   
+  // Critical Warning Flags (New)
+  warningFlags: string[]; // e.g. ["⚠️ 處置股票", "🐋 隔日沖進駐", "📉 融資過高"]
+
   fundamental: AnalysisSection;
   technical: AnalysisSection;
   chips: AnalysisSection; // Institutional holdings/flow

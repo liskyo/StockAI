@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
-import { Search, Cpu, BarChart3, Zap, BrainCircuit, Info } from 'lucide-react';
+import { Search, BarChart3, Zap, BrainCircuit, Info } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import StockDetail from './components/StockDetail';
 import { analyzeStock } from './services/geminiService';
-import { AIAnalysisResult, AnalysisStatus } from './types';
+import { AIAnalysisResult, AnalysisStatus, StockPreview } from './types';
 
 function App() {
   const [searchQuery, setSearchQuery] = useState('');
@@ -18,15 +18,43 @@ function App() {
     performAnalysis(searchQuery);
   };
 
+  const updateHistory = (data: AIAnalysisResult) => {
+    try {
+      const savedHistory = localStorage.getItem('search_history_v1');
+      let history: StockPreview[] = savedHistory ? JSON.parse(savedHistory) : [];
+      
+      const newEntry: StockPreview = {
+        symbol: data.symbol,
+        name: data.name,
+        price: data.currentPrice.toString(),
+        changePercent: data.changePercent,
+        reason: `最後查詢: ${new Date().toLocaleTimeString('zh-TW')}`
+      };
+
+      // Remove existing if same symbol
+      history = history.filter(item => item.symbol !== data.symbol);
+      // Add to front
+      history.unshift(newEntry);
+      // Keep only top 10
+      history = history.slice(0, 10);
+
+      localStorage.setItem('search_history_v1', JSON.stringify(history));
+    } catch (e) {
+      console.warn("Failed to update search history", e);
+    }
+  };
+
   const performAnalysis = async (query: string) => {
     setStatus(AnalysisStatus.LOADING);
     setAnalysisData(null);
     setErrorMsg('');
-    setSearchQuery(query);
+    const symbol = query.trim().toUpperCase();
+    setSearchQuery(symbol);
 
     try {
-      const data = await analyzeStock(query, analysisMode);
+      const data = await analyzeStock(symbol, analysisMode);
       setAnalysisData(data);
+      updateHistory(data);
       setStatus(AnalysisStatus.SUCCESS);
     } catch (err) {
       setErrorMsg("AI 分析失敗，請稍後重試。如果是 Pro 模式，可能需要較長的處理時間。");
@@ -61,7 +89,7 @@ function App() {
                 </div>
                 <input
                   type="text"
-                  className="block w-full pl-10 pr-3 py-2 border border-slate-700 rounded-full leading-5 bg-slate-800/50 text-gray-300 placeholder-gray-500 focus:outline-none focus:bg-slate-800 focus:border-neon-blue focus:ring-1 focus:ring-neon-blue sm:text-sm transition-all"
+                  className="block w-full pl-10 pr-3 py-2 border border-slate-700 rounded-full leading-5 bg-slate-800/50 text-gray-300 placeholder-gray-500 focus:outline-none focus:bg-slate-800 focus:border-neon-blue focus:ring-1 focus:ring-neon-blue sm:text-sm transition-all uppercase"
                   placeholder="輸入股票代號 (2330)..."
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
@@ -124,19 +152,19 @@ function App() {
                     {analysisMode === 'pro' ? <BrainCircuit className="w-8 h-8 text-neon-purple animate-pulse" /> : <Zap className="w-8 h-8 text-neon-blue animate-pulse" />}
                 </div>
             </div>
-            <h2 className="mt-8 text-2xl font-bold text-white animate-pulse">
+            <h2 className="mt-8 text-2xl font-bold text-white animate-pulse text-center px-4">
                 {analysisMode === 'pro' ? '正在進行深度推理分析...' : '正在快速掃描市場數據...'}
             </h2>
-            <p className="text-gray-400 mt-2 max-w-sm text-center">
+            <p className="text-gray-400 mt-2 max-w-sm text-center px-4">
                 {analysisMode === 'pro' 
-                    ? 'Pro 模式正在模擬專家思維，綜合多方數據進行邏輯推理，預計需要 15-30 秒。' 
+                    ? 'Pro 模式正在模擬專家思維與法人行為階段，預計需要 15-30 秒。' 
                     : 'Flash 模式追求效率，正在為您即時抓取最新資訊。'}
             </p>
           </div>
         )}
 
         {status === AnalysisStatus.ERROR && (
-          <div className="flex flex-col items-center justify-center h-[50vh] text-center">
+          <div className="flex flex-col items-center justify-center h-[50vh] text-center px-4">
             <div className="bg-red-500/10 p-6 rounded-full mb-4">
                 <Search className="w-12 h-12 text-red-500" />
             </div>

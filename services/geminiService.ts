@@ -4,8 +4,10 @@ import { AIAnalysisResult, DashboardData, Source, StockPreview } from "../types"
 const apiKey = process.env.API_KEY || '';
 const ai = new GoogleGenAI({ apiKey });
 
-const CACHE_KEY = 'stock_winner_dashboard_cache_v4';
-const CACHE_DURATION = 15 * 60 * 1000;
+const DASHBOARD_CACHE_KEY = 'stock_winner_dashboard_cache_v4';
+const ANALYSIS_CACHE_PREFIX = 'stock_analysis_cache_';
+const DASHBOARD_CACHE_DURATION = 15 * 60 * 1000; // 15 mins for market lists
+const ANALYSIS_CACHE_DURATION = 30 * 60 * 1000; // 30 mins for specific stock analysis
 
 // --- Shared Schemas ---
 const stockPreviewSchema: Schema = {
@@ -118,6 +120,25 @@ const strategiesSchema: Schema = {
 };
 
 export const analyzeStock = async (query: string, mode: 'flash' | 'pro' = 'flash'): Promise<AIAnalysisResult> => {
+  const symbol = query.trim().toUpperCase();
+  const cacheKey = `${ANALYSIS_CACHE_PREFIX}${symbol}_${mode}`;
+
+  // 1. Check Cache (30 Minutes)
+  try {
+    const cachedData = localStorage.getItem(cacheKey);
+    if (cachedData) {
+      const { timestamp, data } = JSON.parse(cachedData);
+      const now = Date.now();
+      if (now - timestamp < ANALYSIS_CACHE_DURATION) {
+        console.log(`Using cached analysis for ${symbol} (${mode})`);
+        return data as AIAnalysisResult;
+      }
+    }
+  } catch (e) {
+    console.warn("Failed to read analysis cache", e);
+  }
+
+  // 2. Perform AI Analysis if no valid cache
   try {
     const prompt = `
       Act as a Professional Institutional Data Scientist for the Taiwan Stock Market.
@@ -167,6 +188,12 @@ export const analyzeStock = async (query: string, mode: 'flash' | 'pro' = 'flash
             .map((w: any) => ({ title: w.title || 'Source', uri: w.uri || '#' }));
     }
     
+    // 3. Save to Cache
+    localStorage.setItem(cacheKey, JSON.stringify({
+      timestamp: Date.now(),
+      data: data
+    }));
+
     return data;
   } catch (error) {
     console.error("Analysis failed:", error);
@@ -176,10 +203,10 @@ export const analyzeStock = async (query: string, mode: 'flash' | 'pro' = 'flash
 
 export const getDashboardData = async (): Promise<DashboardData> => {
     try {
-        const cached = localStorage.getItem(CACHE_KEY);
+        const cached = localStorage.getItem(DASHBOARD_CACHE_KEY);
         if (cached) {
             const { timestamp, data } = JSON.parse(cached);
-            if (Date.now() - timestamp < CACHE_DURATION) return data;
+            if (Date.now() - timestamp < DASHBOARD_CACHE_DURATION) return data;
         }
     } catch (e) {}
 
@@ -212,10 +239,10 @@ export const getDashboardData = async (): Promise<DashboardData> => {
             strategies: strategiesData.strategies || []
         };
 
-        localStorage.setItem(CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: result }));
+        localStorage.setItem(DASHBOARD_CACHE_KEY, JSON.stringify({ timestamp: Date.now(), data: result }));
         return result;
     } catch (e) {
-        const cached = localStorage.getItem(CACHE_KEY);
+        const cached = localStorage.getItem(DASHBOARD_CACHE_KEY);
         return cached ? JSON.parse(cached).data : { trending: [], fundamental: [], technical: [], chips: [], dividend: [], strategies: [] };
     }
 }

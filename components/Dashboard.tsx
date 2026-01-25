@@ -14,7 +14,9 @@ import {
   Globe,
   Lightbulb,
   Sparkles,
-  Percent
+  Percent,
+  History,
+  Clock
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -22,13 +24,14 @@ interface DashboardProps {
 }
 
 // Combine standard tabs with string for dynamic strategy IDs
-type TabType = 'trending' | 'fundamental' | 'technical' | 'chips' | 'dividend' | string;
+type TabType = 'trending' | 'fundamental' | 'technical' | 'chips' | 'dividend' | 'history' | string;
 
 const Dashboard: React.FC<DashboardProps> = ({ onSelectStock }) => {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<TabType>('trending');
+  const [activeTab, setActiveTab] = useState<TabType>('history'); // Default to history tab
   const [localSearch, setLocalSearch] = useState('');
+  const [searchHistory, setSearchHistory] = useState<StockPreview[]>([]);
 
   useEffect(() => {
     const loadMarket = async () => {
@@ -41,6 +44,13 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectStock }) => {
             setLoading(false);
         }
     };
+    
+    // Load search history from localStorage
+    const savedHistory = localStorage.getItem('search_history_v1');
+    if (savedHistory) {
+      setSearchHistory(JSON.parse(savedHistory));
+    }
+
     loadMarket();
   }, []);
 
@@ -52,6 +62,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectStock }) => {
   };
 
   const standardTabs: { id: TabType; label: string; icon: React.ReactNode; color: string }[] = [
+    { id: 'history', label: '搜尋紀錄', icon: <History className="w-4 h-4" />, color: 'text-neon-blue' }, // Now first
     { id: 'trending', label: '熱門 (Yahoo)', icon: <Flame className="w-4 h-4" />, color: 'text-orange-500' },
     { id: 'fundamental', label: '績優 (CMoney)', icon: <DollarSign className="w-4 h-4" />, color: 'text-emerald-500' },
     { id: 'technical', label: '強勢 (Yahoo)', icon: <BarChart2 className="w-4 h-4" />, color: 'text-blue-500' },
@@ -61,6 +72,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectStock }) => {
 
   // Helper to determine what list to show
   const getCurrentList = (): StockPreview[] => {
+      if (activeTab === 'history') return searchHistory;
       if (!data) return [];
       
       // Check standard tabs
@@ -76,6 +88,7 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectStock }) => {
   };
 
   const getTabTitle = (id: TabType) => {
+    if (id === 'history') return '您的搜尋紀錄';
     const t = standardTabs.find(x => x.id === id);
     if (t) return t.label;
     
@@ -92,11 +105,11 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectStock }) => {
     <div className="animate-fade-in">
       {/* Hero Section */}
       <div className="mb-8 text-center py-8">
-         <h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-neon-blue via-neon-purple to-neon-red mb-4 tracking-tighter drop-shadow-lg">
+         <h1 className="text-5xl font-black text-transparent bg-clip-text bg-gradient-to-r from-neon-blue via-neon-purple to-neon-red mb-4 tracking-tighter drop-shadow-lg uppercase">
             TW STOCK WINNER
          </h1>
          <p className="text-gray-400 text-lg max-w-2xl mx-auto">
-            台股 AI 智能決策系統：透過 Google Search 即時同步 Yahoo 與 CMoney 排行榜資訊。
+            台股 AI 智能決策系統：智能緩存技術，分析結果 30 分鐘內即時回溯。
          </p>
       </div>
 
@@ -132,13 +145,21 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectStock }) => {
                     <ListFilter className="w-5 h-5 text-neon-blue" />
                     {getTabTitle(activeTab)}
                 </h3>
-                <span className="text-[10px] text-gray-400 bg-slate-900 px-2 py-1 rounded border border-slate-700 flex items-center gap-1">
-                    <Globe size={10} className="text-neon-green"/>
-                    AI 即時聯網搜尋中
-                 </span>
+                {activeTab !== 'history' && (
+                    <span className="text-[10px] text-gray-400 bg-slate-900 px-2 py-1 rounded border border-slate-700 flex items-center gap-1">
+                        <Globe size={10} className="text-neon-green"/>
+                        AI 即時聯網搜尋中
+                    </span>
+                 )}
+                 {activeTab === 'history' && (
+                    <span className="text-[10px] text-gray-400 bg-slate-900 px-2 py-1 rounded border border-slate-700 flex items-center gap-1">
+                        <Clock size={10} className="text-neon-blue"/>
+                        分析效期 30 分鐘
+                    </span>
+                 )}
              </div>
 
-            {loading ? (
+            {loading && activeTab !== 'history' ? (
                 <div className="space-y-4">
                   <div className="flex items-center justify-center py-10 text-neon-blue animate-pulse">
                      正在連結 Yahoo/CMoney 數據庫分析熱門題材...
@@ -148,8 +169,9 @@ const Dashboard: React.FC<DashboardProps> = ({ onSelectStock }) => {
             ) : (
                 <div className="space-y-3">
                 {currentList?.length === 0 && (
-                    <div className="text-gray-500 text-center py-10 border border-dashed border-slate-700 rounded-xl">
-                        AI 暫時無法從來源獲取此列表，請稍後再試。
+                    <div className="text-gray-500 text-center py-20 border border-dashed border-slate-700 rounded-xl flex flex-col items-center gap-3">
+                        <History size={40} className="text-slate-700" />
+                        <p>{activeTab === 'history' ? '尚無搜尋紀錄，快去診斷您的第一支股票吧！' : 'AI 暫時無法獲取此列表資訊。'}</p>
                     </div>
                 )}
                 {currentList?.map((stock, index) => (

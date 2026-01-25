@@ -1,32 +1,29 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { AIAnalysisResult } from '../types';
 import RadialChart from './RadialChart';
 import { 
   Target, 
   ShieldAlert, 
-  DollarSign, 
-  BarChart2, 
+  DollarSign,
+  BarChart2,
   Users,
   ExternalLink,
   ArrowUp,
   ArrowDown,
   MessageCircleHeart,
   User,
-  Scale,
-  Globe,
-  RefreshCw,
+  Zap,
+  Activity,
   AlertTriangle,
-  Siren,
-  HelpCircle
+  Radar
 } from 'lucide-react';
 
 interface StockDetailProps {
   data: AIAnalysisResult;
   onBack: () => void;
-  onRefresh: (symbol: string) => void;
 }
 
-const StockDetail: React.FC<StockDetailProps> = ({ data, onBack, onRefresh }) => {
+const StockDetail: React.FC<StockDetailProps> = ({ data, onBack }) => {
   const isBullish = data.trend === 'BULLISH';
   const isBearish = data.trend === 'BEARISH';
   const themeColor = isBullish ? 'text-neon-green' : isBearish ? 'text-neon-red' : 'text-gray-400';
@@ -34,38 +31,14 @@ const StockDetail: React.FC<StockDetailProps> = ({ data, onBack, onRefresh }) =>
 
   const isPositive = (data.change || 0) > 0;
   const isNegative = (data.change || 0) < 0;
-  const priceColor = isPositive ? 'text-neon-red' : isNegative ? 'text-neon-green' : 'text-white'; // TW market
+  const priceColor = isPositive ? 'text-neon-red' : isNegative ? 'text-neon-green' : 'text-white';
 
-  // Calculate Risk/Reward Visualization Data
-  const entryPrice = (data.tradeSetup?.entryPriceHigh + data.tradeSetup?.entryPriceLow) / 2;
-  const stopLoss = data.tradeSetup?.stopLoss;
-  const targetPrice = data.tradeSetup?.targetPrice;
-  
-  // Calculate distances
-  const riskDistance = Math.abs(entryPrice - stopLoss);
-  const rewardDistance = Math.abs(targetPrice - entryPrice);
-  const totalDistance = riskDistance + rewardDistance;
-  
-  // Calculate percentages for the bar width
-  const riskPercent = (riskDistance / totalDistance) * 100;
-  const rewardPercent = (rewardDistance / totalDistance) * 100;
-
-  // Auto-refresh every minute. 
-  // Dependency on data.timestamp ensures timer resets if manual refresh occurs (data updates).
-  useEffect(() => {
-    const timer = setInterval(() => {
-      onRefresh(data.symbol);
-    }, 60000); // 60 seconds
-    return () => clearInterval(timer);
-  }, [data.symbol, onRefresh, data.timestamp]);
-
-  // UI Helper for Action Text
-  const getActionText = (action: string) => {
-    if (action === 'BUY') return '積極買進';
-    if (action === 'HOLD') return '等待低接'; // Changed from '觀望' to imply Long strategy (Averaging down)
-    if (action === 'SELL') return '反彈減碼'; // Changed from '賣出'
-    return '中立';
-  };
+  const engine = data.institutionalEngine;
+  const phaseConfig = {
+    LAYOUT: { label: '佈局期', color: 'bg-neon-green', text: 'text-neon-green', icon: <Activity className="w-5 h-5" /> },
+    TRIAL: { label: '試單期', color: 'bg-yellow-400', text: 'text-yellow-400', icon: <Zap className="w-5 h-5" /> },
+    RETREAT: { label: '撤退期', color: 'bg-neon-red', text: 'text-neon-red', icon: <AlertTriangle className="w-5 h-5" /> }
+  }[engine.phase || 'TRIAL'];
 
   return (
     <div className="animate-fade-in pb-10">
@@ -81,7 +54,6 @@ const StockDetail: React.FC<StockDetailProps> = ({ data, onBack, onRefresh }) =>
         <div className={`absolute top-0 left-0 w-1 h-full ${isBullish ? 'bg-neon-green' : isBearish ? 'bg-neon-red' : 'bg-gray-500'}`}></div>
         
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-          {/* Left: Identity */}
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-4xl font-black text-white tracking-tight">{data.symbol}</h1>
@@ -90,23 +62,12 @@ const StockDetail: React.FC<StockDetailProps> = ({ data, onBack, onRefresh }) =>
               </span>
             </div>
             <h2 className="text-xl text-gray-300 mt-1">{data.name}</h2>
-            <p className="text-xs text-gray-500 mt-2 flex items-center gap-2">
-                <span className="flex items-center gap-1.5 px-2 py-0.5 rounded-full bg-slate-800/80 border border-slate-700">
-                  <span className="w-1.5 h-1.5 rounded-full bg-neon-green animate-pulse"></span>
-                  LIVE
-                </span>
-                <button 
-                  onClick={() => onRefresh(data.symbol)}
-                  className="flex items-center gap-1 hover:text-neon-blue transition-colors cursor-pointer"
-                  title="點擊立即更新"
-                >
-                   <RefreshCw size={10} className="animate-spin" />
-                   更新: {data.timestamp}
-                </button>
+            <p className="text-xs text-gray-500 mt-2 flex items-center gap-1">
+                <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></span>
+                分析時間: {data.timestamp}
             </p>
           </div>
 
-          {/* Center: Real-time Price */}
           <div className="flex-1 lg:text-center border-l border-r border-slate-700/50 px-6 mx-2 min-w-[200px]">
              <div className="text-gray-400 text-sm mb-1">即時股價 (TWD)</div>
              <div className={`text-5xl font-black ${priceColor} tracking-tighter flex items-center justify-start lg:justify-center gap-2`}>
@@ -122,139 +83,121 @@ const StockDetail: React.FC<StockDetailProps> = ({ data, onBack, onRefresh }) =>
              </div>
           </div>
           
-          {/* Right: Score */}
           <div className="flex items-center gap-6">
              <div className="text-right">
-                <div className="flex items-center justify-end gap-1 text-gray-400 text-sm mb-1">
-                    <Scale size={12} />
-                    <span>AI 權重評分</span>
-                </div>
+                <p className="text-gray-400 text-sm">AI 綜合評分</p>
                 <div className={`text-5xl font-bold ${themeColor} drop-shadow-lg`}>
                     {data.overallScore}
-                </div>
-                <div className="text-[10px] text-gray-500 mt-1 bg-slate-800/50 px-2 py-1 rounded border border-slate-700">
-                   籌碼(30%) > 基本(20%) > 技術(15%)
                 </div>
              </div>
           </div>
         </div>
       </div>
 
-      {/* WARNING FLAGS (New Section) */}
-      {data.warningFlags && data.warningFlags.length > 0 && (
-          <div className="mb-6 bg-red-500/10 border border-red-500/50 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center gap-4 animate-pulse-slow">
-              <div className="bg-red-500 p-2 rounded-lg flex-shrink-0">
-                  <Siren className="text-white w-6 h-6" />
+      {/* NEW: Institutional Engine Dashboard (狀態機分析) */}
+      <div className="glass-panel rounded-2xl p-6 mb-6 border-l-4 border-neon-purple overflow-hidden relative">
+          <div className="absolute -right-8 -top-8 text-white/5 pointer-events-none">
+              <Radar size={160} />
+          </div>
+          
+          <div className="flex flex-col md:flex-row gap-8 items-center">
+              {/* Left: Phase Indicator */}
+              <div className="flex flex-col items-center gap-3 min-w-[140px]">
+                  <span className="text-xs text-gray-500 uppercase tracking-widest font-bold">法人行為階段</span>
+                  <div className={`w-20 h-20 rounded-full flex items-center justify-center border-4 ${phaseConfig.color.replace('bg-', 'border-')}/30 animate-pulse-slow`}>
+                      <div className={`w-14 h-14 rounded-full ${phaseConfig.color} flex items-center justify-center text-white shadow-lg shadow-white/10`}>
+                          {phaseConfig.icon}
+                      </div>
+                  </div>
+                  <span className={`text-xl font-black ${phaseConfig.text}`}>{phaseConfig.label}</span>
               </div>
-              <div>
-                  <h3 className="text-red-400 font-bold text-sm mb-1">投資風險警示 (Risk Alert)</h3>
-                  <div className="flex flex-wrap gap-2">
-                      {data.warningFlags.map((flag, idx) => (
-                          <span key={idx} className="bg-red-900/40 text-red-200 px-2 py-1 rounded text-xs border border-red-800 font-medium">
-                              {flag}
-                          </span>
-                      ))}
+
+              {/* Middle: Key Insights */}
+              <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
+                  <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/50">
+                      <div className="text-xs text-gray-500 mb-1">主控法人</div>
+                      <div className="text-lg font-bold text-white flex items-center gap-2">
+                          <Users className="text-neon-purple w-4 h-4" />
+                          {engine.leadingActor}
+                      </div>
+                      <div className="text-[10px] text-gray-400 mt-2">這檔股票現在聽他的話</div>
+                  </div>
+                  <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/50">
+                      <div className="text-xs text-gray-500 mb-1">狀態信心值</div>
+                      <div className="flex items-end gap-2">
+                          <span className="text-2xl font-black text-neon-blue">{engine.confidence}%</span>
+                          <div className="flex-1 h-1.5 bg-slate-700 rounded-full mb-2 overflow-hidden">
+                              <div className="h-full bg-neon-blue" style={{ width: `${engine.confidence}%` }}></div>
+                          </div>
+                      </div>
+                  </div>
+                  <div className="sm:col-span-2 bg-slate-800/40 p-4 rounded-xl border border-slate-700/50">
+                      <div className="text-xs text-gray-500 mb-2">翻臉雷達 / 行為變化預警</div>
+                      <div className="flex flex-wrap gap-2">
+                          {engine.warningSignals.map((sig, i) => (
+                              <span key={i} className="bg-neon-red/10 text-neon-red text-[10px] px-2 py-1 rounded border border-neon-red/20 font-bold">
+                                  ⚠️ {sig}
+                              </span>
+                          ))}
+                          {engine.warningSignals.length === 0 && <span className="text-xs text-neon-green">✅ 目前無翻臉跡象</span>}
+                      </div>
+                  </div>
+              </div>
+
+              {/* Right: Description */}
+              <div className="md:w-1/3 bg-slate-900/50 p-5 rounded-xl border border-slate-700">
+                  <h4 className="text-xs text-gray-400 mb-2 font-bold flex items-center gap-2">
+                      <Zap size={14} className="text-yellow-400" /> 法人行為引導
+                  </h4>
+                  <p className="text-sm text-gray-300 leading-relaxed italic">
+                      "{engine.description}"
+                  </p>
+                  <div className="mt-4 flex items-center justify-between text-[10px] text-gray-500">
+                      <span>連續性評分: {engine.continuityScore}/100</span>
+                      <div className="w-20 h-1 bg-slate-800 rounded">
+                          <div className="h-full bg-neon-purple" style={{ width: `${engine.continuityScore}%` }}></div>
+                      </div>
                   </div>
               </div>
           </div>
-      )}
+      </div>
 
       {/* Trade Setup Card */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
         <div className="md:col-span-2 glass-panel rounded-2xl p-6 border-t-2 border-neon-blue">
-          <div className="flex items-center justify-between mb-6">
-             <div className="flex items-center gap-2">
-                <Target className="w-5 h-5 text-neon-blue" />
-                <h3 className="text-lg font-bold text-white">多方操作策略 (Long Strategy)</h3>
-             </div>
-             <div className="px-3 py-1 bg-slate-800 rounded-full text-xs text-neon-blue border border-blue-500/30 font-mono">
-                AI 戰術建議
-             </div>
+          <div className="flex items-center gap-2 mb-4">
+            <Target className="w-5 h-5 text-neon-blue" />
+            <h3 className="text-lg font-bold text-white">智能交易策略 (Trade Setup)</h3>
           </div>
           
-          {/* Main Price Levels Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+            <div className="bg-slate-800/50 p-4 rounded-xl">
               <span className="text-xs text-gray-400 block mb-1">建議動作</span>
               <span className={`text-xl font-bold ${data.tradeSetup?.action === 'BUY' ? 'text-neon-green' : data.tradeSetup?.action === 'SELL' ? 'text-neon-red' : 'text-yellow-400'}`}>
-                {getActionText(data.tradeSetup?.action)}
+                {data.tradeSetup?.action === 'BUY' ? '買進' : data.tradeSetup?.action === 'SELL' ? '賣出' : '觀望'}
               </span>
             </div>
-            <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
-               <span className="text-xs text-gray-400 block mb-1">停損 (Stop)</span>
-               <span className="text-lg font-semibold text-neon-red">
-                 {data.tradeSetup?.stopLoss}
-               </span>
-            </div>
-            <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700 bg-blue-500/10 border-blue-500/30">
-               <span className="text-xs text-blue-300 block mb-1">佈局/攤平 (Entry/Avg)</span>
+            <div className="bg-slate-800/50 p-4 rounded-xl">
+               <span className="text-xs text-gray-400 block mb-1">進場區間</span>
                <span className="text-lg font-semibold text-white">
-                 {Math.round(entryPrice * 100) / 100}
+                 {data.tradeSetup?.entryPriceLow} - {data.tradeSetup?.entryPriceHigh}
                </span>
             </div>
-            <div className="bg-slate-800/50 p-4 rounded-xl border border-slate-700">
-               <span className="text-xs text-gray-400 block mb-1">目標 (Target)</span>
+            <div className="bg-slate-800/50 p-4 rounded-xl">
+               <span className="text-xs text-gray-400 block mb-1">目標價</span>
                <span className="text-lg font-semibold text-neon-green">
                  {data.tradeSetup?.targetPrice}
                </span>
             </div>
+            <div className="bg-slate-800/50 p-4 rounded-xl">
+               <span className="text-xs text-gray-400 block mb-1">停損點</span>
+               <span className="text-lg font-semibold text-neon-red">
+                 {data.tradeSetup?.stopLoss}
+               </span>
+            </div>
           </div>
 
-          {/* Risk/Reward Visualization */}
-          <div className="mb-6 bg-slate-900/50 p-4 rounded-xl border border-slate-700">
-             <div className="flex items-center justify-between mb-2">
-                <span className="text-sm font-bold text-gray-300 flex items-center gap-1">
-                   損益比 (Risk/Reward)
-                   <span className="text-neon-purple font-mono ml-1 text-lg">{data.tradeSetup?.riskRewardRatio}</span>
-                </span>
-                <div className="flex items-center gap-1 text-[10px] text-gray-500">
-                    <HelpCircle size={10} />
-                    <span>長條比例代表虧損與獲利空間</span>
-                </div>
-             </div>
-             
-             {/* The Visual Bar */}
-             <div className="relative h-6 w-full rounded-full overflow-hidden flex shadow-inner bg-slate-800">
-                {/* Risk Part */}
-                <div 
-                    style={{ width: `${riskPercent}%` }} 
-                    className="h-full bg-gradient-to-r from-red-900 to-neon-red relative group"
-                >
-                    <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                        風險
-                    </span>
-                </div>
-                
-                {/* Entry Divider */}
-                <div className="w-1 h-full bg-white shadow-[0_0_10px_rgba(255,255,255,0.8)] z-10"></div>
-                
-                {/* Reward Part */}
-                <div 
-                    style={{ width: `${rewardPercent}%` }} 
-                    className="h-full bg-gradient-to-r from-neon-green to-emerald-800 relative group"
-                >
-                     <span className="absolute inset-0 flex items-center justify-center text-[10px] font-bold text-black opacity-0 group-hover:opacity-100 transition-opacity">
-                        獲利
-                    </span>
-                </div>
-             </div>
-
-             <div className="flex justify-between mt-2 text-xs">
-                 <div className="text-neon-red">
-                    <span className="block font-bold">-{riskDistance.toFixed(1)}</span>
-                    <span className="text-gray-500">潛在虧損 (1單位)</span>
-                 </div>
-                 <div className="text-neon-green text-right">
-                    <span className="block font-bold">+{rewardDistance.toFixed(1)}</span>
-                    <span className="text-gray-500">潛在獲利 ({(rewardDistance/riskDistance).toFixed(1)}單位)</span>
-                 </div>
-             </div>
-             <p className="mt-2 text-[10px] text-gray-500 border-t border-slate-800 pt-2">
-                 💡 觀察說明：綠色條如果是紅色條的 2 倍以上 (1:2)，通常被視為優質交易機會。這表示您願意承擔 1 元的風險來換取 2 元以上的獲利。
-             </p>
-          </div>
-
-          <div>
+          <div className="mt-6">
             <div className="flex justify-between items-center mb-2">
               <span className="text-sm text-gray-300">成功機率預測</span>
               <span className="text-xl font-bold text-neon-purple">{data.tradeSetup?.probability || 0}%</span>
@@ -265,9 +208,7 @@ const StockDetail: React.FC<StockDetailProps> = ({ data, onBack, onRefresh }) =>
                 style={{ width: `${data.tradeSetup?.probability || 0}%` }}
               ></div>
             </div>
-            <div className="flex justify-between mt-2 text-xs text-gray-500">
-                <span>預期時間: {data.tradeSetup?.timeframe}</span>
-            </div>
+            <p className="text-xs text-gray-500 mt-2 text-right">預期時間: {data.tradeSetup?.timeframe}</p>
           </div>
         </div>
 
@@ -275,45 +216,21 @@ const StockDetail: React.FC<StockDetailProps> = ({ data, onBack, onRefresh }) =>
         <div className="glass-panel rounded-2xl p-6">
              <div className="flex items-center gap-2 mb-4">
                 <ShieldAlert className="w-5 h-5 text-orange-400" />
-                <h3 className="text-lg font-bold text-white">風險評估 (Vetaran's View)</h3>
+                <h3 className="text-lg font-bold text-white">風險評估</h3>
              </div>
-             <p className="text-gray-300 text-sm leading-relaxed whitespace-pre-line">
+             <p className="text-gray-300 text-sm leading-relaxed">
                 {data.riskAnalysis}
              </p>
         </div>
       </div>
 
-      {/* 6 Dimensions Analysis Grid (2 Rows x 3 Cols) */}
+      {/* 3 Pillars Analysis Grid (Row 1) */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-6">
-        
-        {/* 1. Chips (Crucial for Veteran Mode) - Moved to first spot */}
-        <div className="glass-panel rounded-2xl p-5 hover:bg-slate-800/80 transition-colors border border-purple-500/30 shadow-[0_0_10px_rgba(139,92,246,0.1)]">
-          <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-3">
-             <div className="flex items-center gap-2">
-                <Users className="w-5 h-5 text-purple-400" />
-                <h3 className="font-bold text-white">主力籌碼 (30%)</h3>
-             </div>
-             <div className="h-16 w-16">
-                 <RadialChart score={data.chips?.score || 0} label="" color="#8b5cf6" />
-             </div>
-          </div>
-          <p className="text-sm text-white mb-3 font-medium">{data.chips?.summary}</p>
-          <ul className="space-y-2">
-            {(data.chips?.details || []).map((detail, i) => (
-                <li key={i} className="text-xs text-gray-400 flex items-start">
-                    <span className="mr-2 text-purple-500">•</span>
-                    {detail}
-                </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* 2. Fundamental */}
         <div className="glass-panel rounded-2xl p-5 hover:bg-slate-800/80 transition-colors">
           <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-3">
              <div className="flex items-center gap-2">
                 <DollarSign className="w-5 h-5 text-emerald-400" />
-                <h3 className="font-bold text-white">基本面 (20%)</h3>
+                <h3 className="font-bold text-white">基本面</h3>
              </div>
              <div className="h-16 w-16">
                  <RadialChart score={data.fundamental?.score || 0} label="" color="#10b981" />
@@ -330,12 +247,11 @@ const StockDetail: React.FC<StockDetailProps> = ({ data, onBack, onRefresh }) =>
           </ul>
         </div>
 
-        {/* 3. Technical */}
         <div className="glass-panel rounded-2xl p-5 hover:bg-slate-800/80 transition-colors">
           <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-3">
              <div className="flex items-center gap-2">
                 <BarChart2 className="w-5 h-5 text-blue-400" />
-                <h3 className="font-bold text-white">技術面 (15%)</h3>
+                <h3 className="font-bold text-white">技術面</h3>
              </div>
              <div className="h-16 w-16">
                  <RadialChart score={data.technical?.score || 0} label="" color="#3b82f6" />
@@ -352,56 +268,35 @@ const StockDetail: React.FC<StockDetailProps> = ({ data, onBack, onRefresh }) =>
           </ul>
         </div>
 
-        {/* 4. Industry/Macro */}
-        <div className="glass-panel rounded-2xl p-5 hover:bg-slate-800/80 transition-colors border border-slate-700/50">
+        <div className="glass-panel rounded-2xl p-5 hover:bg-slate-800/80 transition-colors">
           <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-3">
              <div className="flex items-center gap-2">
-                <Globe className="w-5 h-5 text-cyan-400" />
-                <h3 className="font-bold text-white">產業總經 (15%)</h3>
+                <Users className="w-5 h-5 text-purple-400" />
+                <h3 className="font-bold text-white">籌碼面 (數據)</h3>
              </div>
              <div className="h-16 w-16">
-                 <RadialChart score={data.industry?.score || 0} label="" color="#22d3ee" />
+                 <RadialChart score={data.chips?.score || 0} label="" color="#8b5cf6" />
              </div>
           </div>
-          <p className="text-sm text-white mb-3 font-medium">{data.industry?.summary}</p>
+          <p className="text-sm text-white mb-3 font-medium">{data.chips?.summary}</p>
           <ul className="space-y-2">
-            {(data.industry?.details || []).map((detail, i) => (
+            {(data.chips?.details || []).map((detail, i) => (
                 <li key={i} className="text-xs text-gray-400 flex items-start">
-                    <span className="mr-2 text-cyan-500">•</span>
+                    <span className="mr-2 text-purple-500">•</span>
                     {detail}
                 </li>
             ))}
           </ul>
         </div>
+      </div>
 
-        {/* 5. Retail Indicators */}
-        <div className="glass-panel rounded-2xl p-5 hover:bg-slate-800/80 transition-colors border border-slate-700/50">
-          <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-3">
-             <div className="flex items-center gap-2">
-                <User className="w-5 h-5 text-orange-400" />
-                <h3 className="font-bold text-white">散戶/融資 (10%)</h3>
-             </div>
-             <div className="h-16 w-16">
-                 <RadialChart score={data.retail?.score || 0} label="" color="#fb923c" />
-             </div>
-          </div>
-          <p className="text-sm text-white mb-3 font-medium">{data.retail?.summary}</p>
-           <ul className="space-y-2">
-            {(data.retail?.details || []).map((detail, i) => (
-                <li key={i} className="text-xs text-gray-400 flex items-start">
-                    <span className="mr-2 text-orange-500">•</span>
-                    {detail}
-                </li>
-            ))}
-          </ul>
-        </div>
-
-        {/* 6. Market Sentiment */}
+      {/* New Dimensions: Market Sentiment & Retail Indicators (Row 2) */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
         <div className="glass-panel rounded-2xl p-5 hover:bg-slate-800/80 transition-colors border border-slate-700/50">
           <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-3">
              <div className="flex items-center gap-2">
                 <MessageCircleHeart className="w-5 h-5 text-pink-400" />
-                <h3 className="font-bold text-white">市場情緒 (10%)</h3>
+                <h3 className="font-bold text-white">市場情緒 (新聞/社群)</h3>
              </div>
              <div className="h-16 w-16">
                  <RadialChart score={data.marketSentiment?.score || 0} label="" color="#f472b6" />
@@ -412,6 +307,27 @@ const StockDetail: React.FC<StockDetailProps> = ({ data, onBack, onRefresh }) =>
             {(data.marketSentiment?.details || []).map((detail, i) => (
                 <li key={i} className="text-xs text-gray-400 flex items-start">
                     <span className="mr-2 text-pink-500">•</span>
+                    {detail}
+                </li>
+            ))}
+          </ul>
+        </div>
+
+        <div className="glass-panel rounded-2xl p-5 hover:bg-slate-800/80 transition-colors border border-slate-700/50">
+          <div className="flex justify-between items-center mb-4 border-b border-slate-700 pb-3">
+             <div className="flex items-center gap-2">
+                <User className="w-5 h-5 text-orange-400" />
+                <h3 className="font-bold text-white">散戶指標 (融資券)</h3>
+             </div>
+             <div className="h-16 w-16">
+                 <RadialChart score={data.retail?.score || 0} label="" color="#fb923c" />
+             </div>
+          </div>
+          <p className="text-sm text-white mb-3 font-medium">{data.retail?.summary}</p>
+           <ul className="space-y-2">
+            {(data.retail?.details || []).map((detail, i) => (
+                <li key={i} className="text-xs text-gray-400 flex items-start">
+                    <span className="mr-2 text-orange-500">•</span>
                     {detail}
                 </li>
             ))}

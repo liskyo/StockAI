@@ -27,7 +27,7 @@ export interface DashboardData {
   fundamental: StockPreview[]; // CMoney 績優
   technical: StockPreview[];   // Yahoo 強勢
   chips: StockPreview[];       // CMoney 法人
-  dividend: StockPreview[];    // Yahoo 高殖利率 (Replaced Leading)
+  dividend: StockPreview[];    // Yahoo 高殖利率
   strategies: StrategyGroup[]; // Dynamic Strategies from current market
 }
 
@@ -35,6 +35,16 @@ export interface AnalysisSection {
   score: number; // 0-100
   summary: string;
   details: string[];
+}
+
+// New professional institutional engine types
+export interface InstitutionalEngine {
+  phase: 'LAYOUT' | 'TRIAL' | 'RETREAT'; // 佈局, 試單, 撤退
+  leadingActor: string; // e.g., "外資", "投信", "自營商"
+  continuityScore: number; // 連續性 0-100
+  confidence: number; // 狀態信心值 0-100
+  warningSignals: string[]; // 翻臉預警
+  description: string; // 聽誰的話
 }
 
 export interface TradeSetup {
@@ -45,7 +55,6 @@ export interface TradeSetup {
   stopLoss: number;
   probability: number; // 0-100%
   timeframe: string; // e.g., "2-4 Weeks"
-  riskRewardRatio: string; // e.g. "1:3"
 }
 
 export interface Source {
@@ -57,26 +66,21 @@ export interface AIAnalysisResult {
   symbol: string;
   name: string;
   timestamp: string;
-  
-  // Real-time market data
   currentPrice: number;
   change: number;
   changePercent: number;
-
-  overallScore: number; // 0-100
+  overallScore: number;
   trend: 'BULLISH' | 'BEARISH' | 'NEUTRAL';
   
-  // Critical Warning Flags (New)
-  warningFlags: string[]; // e.g. ["⚠️ 處置股票", "🐋 隔日沖進駐", "📉 融資過高"]
-
   fundamental: AnalysisSection;
   technical: AnalysisSection;
-  chips: AnalysisSection; // Institutional holdings/flow
+  chips: AnalysisSection;
   
-  // New Dimensions
-  industry: AnalysisSection;        // Industry trends & Macro environment
-  marketSentiment: AnalysisSection; // News, Social Media, Fear/Greed
-  retail: AnalysisSection;          // Financing, Short Selling, Retail participation
+  // Advanced Engine
+  institutionalEngine: InstitutionalEngine;
+  
+  marketSentiment: AnalysisSection;
+  retail: AnalysisSection;
   
   tradeSetup: TradeSetup;
   riskAnalysis: string;

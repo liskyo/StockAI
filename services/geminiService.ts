@@ -154,10 +154,32 @@ export const analyzeStock = async (query: string, mode: 'flash' | 'pro' = 'flash
 
   // 2. Perform AI Analysis if no valid cache
   try {
+    // Get current time in Taipei
+    const now = new Date();
+    const taipeiTime = now.toLocaleTimeString('zh-TW', { timeZone: 'Asia/Taipei', hour12: false });
+    const isMarketHours = now.getHours() >= 9 && (now.getHours() < 13 || (now.getHours() === 13 && now.getMinutes() <= 30));
+
     const prompt = `
       Act as a Professional Institutional Data Scientist for the Taiwan Stock Market.
-      Stock: "${query}"
+      Target Stock: "${query}"
       
+      [CRITICAL: REAL-TIME PRICE DATA]
+      Current System Time (Taipei): ${taipeiTime}
+      Status: ${isMarketHours ? 'MARKET OPEN (盤中)' : 'MARKET CLOSED (盤後)'}
+      
+      INSTRUCTIONS FOR PRICE FETCHING:
+      1. You MUST use 'googleSearch' to find the price.
+      2. If Status is MARKET OPEN: Search for "TWSE ${query} real-time price" and extract the LATEST trade price (nearest hour/minute).
+      3. If Status is MARKET CLOSED: Search for "TWSE ${query} closing price today".
+      4. The value in 'currentPrice' MUST MATCH the search result. Do NOT use internal memory for price.
+
+      [REASONING PROCESS]
+      Use your thinking process to:
+      1. First, verify the latest price and volume data from search tools.
+      2. Second, analyze the institutional flows (Foreign Investors/Investment Trust).
+      3. Third, determine the "Institutional Phase" (Layout/Trial/Retreat) by cross-referencing price action with chip stability.
+      4. Finally, formulate specific price targets and strategies.
+
       CORE ENGINE MISSION:
       Implement a "State Machine" logic to identify the current institutional behavior phase:
       1. LAYOUT (🟢佈局期): Consistent, gentle accumulation by major actors.
@@ -186,7 +208,13 @@ export const analyzeStock = async (query: string, mode: 'flash' | 'pro' = 'flash
     };
 
     if (mode === 'pro') {
-      config.thinkingConfig = { thinkingBudget: 20000 };
+      // Balanced Thinking Budget: 5120 tokens
+      // This allows for ~3-4k words of internal reasoning (High Precision)
+      // while keeping generation time typically under 20-30 seconds.
+      config.thinkingConfig = { thinkingBudget: 5120 };
+    } else {
+       // Disable thinking for flash mode to ensure maximum speed
+       config.thinkingConfig = { thinkingBudget: 0 };
     }
 
     const response = await ai.models.generateContent({

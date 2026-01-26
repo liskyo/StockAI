@@ -1,5 +1,6 @@
+
 import React from 'react';
-import { AIAnalysisResult } from '../types';
+import { AIAnalysisResult, TimeframeStrategy } from '../types';
 import RadialChart from './RadialChart';
 import { 
   Target, 
@@ -15,13 +16,55 @@ import {
   Zap,
   Activity,
   AlertTriangle,
-  Radar
+  Radar,
+  Clock,
+  Calendar,
+  Anchor
 } from 'lucide-react';
 
 interface StockDetailProps {
   data: AIAnalysisResult;
   onBack: () => void;
 }
+
+const StrategyCard = ({ strategy, type }: { strategy: TimeframeStrategy, type: 'short' | 'medium' | 'long' }) => {
+  if (!strategy) return null;
+
+  const config = {
+    short: { title: '短線操作 (1-3天)', icon: <Zap size={16} />, color: 'text-cyan-400', border: 'border-cyan-400/30' },
+    medium: { title: '波段策略 (1-3週)', icon: <Calendar size={16} />, color: 'text-yellow-400', border: 'border-yellow-400/30' },
+    long: { title: '長線佈局 (1-3月)', icon: <Anchor size={16} />, color: 'text-purple-400', border: 'border-purple-400/30' },
+  }[type];
+
+  const actionColor = 
+    strategy.action === 'BUY' ? 'bg-neon-red text-white' : 
+    strategy.action === 'SELL' ? 'bg-neon-green text-white' : 
+    strategy.action === 'OBSERVE' ? 'bg-gray-600 text-gray-200' :
+    'bg-yellow-500 text-black'; // HOLD
+
+  const actionText = 
+    strategy.action === 'BUY' ? '偏多操作' : 
+    strategy.action === 'SELL' ? '偏空操作' : 
+    strategy.action === 'OBSERVE' ? '觀望' : '續抱';
+
+  return (
+    <div className={`bg-slate-900/60 p-4 rounded-xl border ${config.border} flex flex-col h-full`}>
+       <div className={`flex items-center gap-2 mb-2 font-bold ${config.color} text-sm`}>
+          {config.icon}
+          {config.title}
+       </div>
+       <div className="flex justify-between items-center mb-3">
+          <span className={`px-2 py-0.5 rounded text-xs font-bold ${actionColor}`}>
+             {actionText}
+          </span>
+          <span className="text-white text-sm font-mono">{strategy.priceTarget}</span>
+       </div>
+       <p className="text-xs text-gray-400 leading-relaxed flex-1">
+          {strategy.suggestion}
+       </p>
+    </div>
+  );
+};
 
 const StockDetail: React.FC<StockDetailProps> = ({ data, onBack }) => {
   const isBullish = data.trend === 'BULLISH';
@@ -100,9 +143,9 @@ const StockDetail: React.FC<StockDetailProps> = ({ data, onBack }) => {
               <Radar size={160} />
           </div>
           
-          <div className="flex flex-col md:flex-row gap-8 items-center">
+          <div className="flex flex-col md:flex-row gap-8 items-start">
               {/* Left: Phase Indicator */}
-              <div className="flex flex-col items-center gap-3 min-w-[140px]">
+              <div className="flex flex-col items-center gap-3 min-w-[140px] pt-4">
                   <span className="text-xs text-gray-500 uppercase tracking-widest font-bold">法人行為階段</span>
                   <div className={`w-20 h-20 rounded-full flex items-center justify-center border-4 ${phaseConfig.color.replace('bg-', 'border-')}/30 animate-pulse-slow`}>
                       <div className={`w-14 h-14 rounded-full ${phaseConfig.color} flex items-center justify-center text-white shadow-lg shadow-white/10`}>
@@ -112,50 +155,58 @@ const StockDetail: React.FC<StockDetailProps> = ({ data, onBack }) => {
                   <span className={`text-xl font-black ${phaseConfig.text}`}>{phaseConfig.label}</span>
               </div>
 
-              {/* Middle: Key Insights */}
-              <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-4 w-full">
-                  <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/50">
-                      <div className="text-xs text-gray-500 mb-1">主控法人</div>
-                      <div className="text-lg font-bold text-white flex items-center gap-2">
-                          <Users className="text-neon-purple w-4 h-4" />
-                          {engine.leadingActor}
-                      </div>
-                      <div className="text-[10px] text-gray-400 mt-2">這檔股票現在聽他的話</div>
+              {/* Middle & Right: Key Insights & Strategies */}
+              <div className="flex-1 w-full space-y-6">
+                  {/* Top Row: Details */}
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/50">
+                            <div className="text-xs text-gray-500 mb-1">主控法人</div>
+                            <div className="text-lg font-bold text-white flex items-center gap-2">
+                                <Users className="text-neon-purple w-4 h-4" />
+                                {engine.leadingActor}
+                            </div>
+                        </div>
+                        <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/50">
+                            <div className="text-xs text-gray-500 mb-1">狀態信心值</div>
+                            <div className="flex items-end gap-2">
+                                <span className="text-2xl font-black text-neon-blue">{engine.confidence}%</span>
+                                <div className="flex-1 h-1.5 bg-slate-700 rounded-full mb-2 overflow-hidden">
+                                    <div className="h-full bg-neon-blue" style={{ width: `${engine.confidence}%` }}></div>
+                                </div>
+                            </div>
+                        </div>
+                        <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/50 sm:col-span-2 lg:col-span-1">
+                            <div className="text-xs text-gray-500 mb-2">翻臉雷達</div>
+                            <div className="flex flex-wrap gap-2">
+                                {engine.warningSignals.map((sig, i) => (
+                                    <span key={i} className="bg-neon-red/10 text-neon-red text-[10px] px-2 py-1 rounded border border-neon-red/20 font-bold">
+                                        ⚠️ {sig}
+                                    </span>
+                                ))}
+                                {engine.warningSignals.length === 0 && <span className="text-xs text-neon-green">✅ 目前無翻臉跡象</span>}
+                            </div>
+                        </div>
                   </div>
-                  <div className="bg-slate-800/40 p-4 rounded-xl border border-slate-700/50">
-                      <div className="text-xs text-gray-500 mb-1">狀態信心值</div>
-                      <div className="flex items-end gap-2">
-                          <span className="text-2xl font-black text-neon-blue">{engine.confidence}%</span>
-                          <div className="flex-1 h-1.5 bg-slate-700 rounded-full mb-2 overflow-hidden">
-                              <div className="h-full bg-neon-blue" style={{ width: `${engine.confidence}%` }}></div>
-                          </div>
-                      </div>
-                  </div>
-                  <div className="sm:col-span-2 bg-slate-800/40 p-4 rounded-xl border border-slate-700/50">
-                      <div className="text-xs text-gray-500 mb-2">翻臉雷達 / 行為變化預警</div>
-                      <div className="flex flex-wrap gap-2">
-                          {engine.warningSignals.map((sig, i) => (
-                              <span key={i} className="bg-neon-red/10 text-neon-red text-[10px] px-2 py-1 rounded border border-neon-red/20 font-bold">
-                                  ⚠️ {sig}
-                              </span>
-                          ))}
-                          {engine.warningSignals.length === 0 && <span className="text-xs text-neon-green">✅ 目前無翻臉跡象</span>}
-                      </div>
-                  </div>
-              </div>
 
-              {/* Right: Description */}
-              <div className="md:w-1/3 bg-slate-900/50 p-5 rounded-xl border border-slate-700">
-                  <h4 className="text-xs text-gray-400 mb-2 font-bold flex items-center gap-2">
-                      <Zap size={14} className="text-yellow-400" /> 法人行為引導
-                  </h4>
-                  <p className="text-sm text-gray-300 leading-relaxed italic">
-                      "{engine.description}"
-                  </p>
-                  <div className="mt-4 flex items-center justify-between text-[10px] text-gray-500">
-                      <span>連續性評分: {engine.continuityScore}/100</span>
-                      <div className="w-20 h-1 bg-slate-800 rounded">
-                          <div className="h-full bg-neon-purple" style={{ width: `${engine.continuityScore}%` }}></div>
+                  <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-700 relative">
+                     <div className="absolute top-4 right-4 text-[10px] text-gray-500">
+                        連續性評分: {engine.continuityScore}/100
+                     </div>
+                     <h4 className="text-xs text-gray-400 mb-2 font-bold flex items-center gap-2">
+                        <Zap size={14} className="text-yellow-400" /> 法人行為解讀
+                     </h4>
+                     <p className="text-sm text-gray-300 leading-relaxed italic pr-12">
+                        "{engine.description}"
+                     </p>
+                  </div>
+
+                  {/* Multi-Timeframe Strategies */}
+                  <div className="pt-2 border-t border-slate-700/50">
+                      <h4 className="text-xs text-gray-400 mb-3 font-bold uppercase tracking-wider">分時操作策略建議</h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                          <StrategyCard strategy={engine.shortTermStrategy} type="short" />
+                          <StrategyCard strategy={engine.mediumTermStrategy} type="medium" />
+                          <StrategyCard strategy={engine.longTermStrategy} type="long" />
                       </div>
                   </div>
               </div>

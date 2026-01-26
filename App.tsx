@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Search, BarChart3, Zap, BrainCircuit, Info } from 'lucide-react';
+import { Search, BarChart3, Zap, BrainCircuit, Info, Gem } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import StockDetail from './components/StockDetail';
 import { analyzeStock } from './services/geminiService';
@@ -74,30 +74,39 @@ function App() {
       {/* Navbar */}
       <nav className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-2 cursor-pointer" onClick={handleBack}>
+          <div className="flex items-center justify-between h-16 gap-4">
+            <div className="flex items-center gap-2 cursor-pointer shrink-0" onClick={handleBack}>
               <div className="bg-neon-blue p-1.5 rounded-lg">
                 <BarChart3 className="h-6 w-6 text-white" />
               </div>
               <span className="font-bold text-xl tracking-tight text-white hidden sm:block">StockWinner<span className="text-neon-blue">.AI</span></span>
             </div>
             
-            <div className="flex-1 max-w-lg mx-4 flex flex-col gap-2">
-              <form onSubmit={handleSearch} className="relative group">
-                <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
-                  <Search className="h-5 w-5 text-gray-500 group-focus-within:text-neon-blue transition-colors" />
+            <div className="flex-1 max-w-lg flex items-center">
+              <form onSubmit={handleSearch} className="w-full flex items-center gap-2">
+                <div className="relative group flex-1">
+                    <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                    <Search className="h-5 w-5 text-gray-500 group-focus-within:text-neon-blue transition-colors" />
+                    </div>
+                    <input
+                    type="text"
+                    className="block w-full pl-10 pr-3 py-2 border border-slate-700 rounded-full leading-5 bg-slate-800/50 text-gray-300 placeholder-gray-500 focus:outline-none focus:bg-slate-800 focus:border-neon-blue focus:ring-1 focus:ring-neon-blue sm:text-sm transition-all uppercase"
+                    placeholder="輸入代號 (2330)..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    />
                 </div>
-                <input
-                  type="text"
-                  className="block w-full pl-10 pr-3 py-2 border border-slate-700 rounded-full leading-5 bg-slate-800/50 text-gray-300 placeholder-gray-500 focus:outline-none focus:bg-slate-800 focus:border-neon-blue focus:ring-1 focus:ring-neon-blue sm:text-sm transition-all uppercase"
-                  placeholder="輸入股票代號 (2330)..."
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
+                <button 
+                    type="submit"
+                    className="bg-gradient-to-r from-yellow-500 to-orange-500 hover:from-yellow-400 hover:to-orange-400 text-slate-900 px-4 py-2 rounded-full font-bold shadow-lg shadow-orange-500/20 transition-all flex items-center gap-2 shrink-0"
+                >
+                    <Gem size={18} />
+                    <span className="hidden xs:inline">尋寶</span>
+                </button>
               </form>
             </div>
 
-            <div className="hidden lg:flex items-center gap-2">
+            <div className="hidden lg:flex items-center gap-2 shrink-0">
                 <div className="flex bg-slate-800 p-1 rounded-xl border border-slate-700">
                     <button 
                         onClick={() => setAnalysisMode('flash')}

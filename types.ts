@@ -1,3 +1,4 @@
+
 export interface StockMetadata {
   symbol: string;
   name: string;
@@ -37,6 +38,12 @@ export interface AnalysisSection {
   details: string[];
 }
 
+export interface TimeframeStrategy {
+  action: 'BUY' | 'SELL' | 'HOLD' | 'OBSERVE';
+  priceTarget: string; // e.g., "100-105"
+  suggestion: string; // Brief advice
+}
+
 // New professional institutional engine types
 export interface InstitutionalEngine {
   phase: 'LAYOUT' | 'TRIAL' | 'RETREAT'; // 佈局, 試單, 撤退
@@ -45,6 +52,11 @@ export interface InstitutionalEngine {
   confidence: number; // 狀態信心值 0-100
   warningSignals: string[]; // 翻臉預警
   description: string; // 聽誰的話
+  
+  // New specific strategies
+  shortTermStrategy: TimeframeStrategy;  // 1-3 Days
+  mediumTermStrategy: TimeframeStrategy; // 1-3 Weeks
+  longTermStrategy: TimeframeStrategy;   // 1-3 Months
 }
 
 export interface TradeSetup {

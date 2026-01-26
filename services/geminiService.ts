@@ -1,11 +1,12 @@
+
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { AIAnalysisResult, DashboardData, Source, StockPreview } from "../types";
 
 const apiKey = process.env.API_KEY || '';
 const ai = new GoogleGenAI({ apiKey });
 
-const DASHBOARD_CACHE_KEY = 'stock_winner_dashboard_cache_v4';
-const ANALYSIS_CACHE_PREFIX = 'stock_analysis_cache_';
+const DASHBOARD_CACHE_KEY = 'stock_winner_dashboard_cache_v5';
+const ANALYSIS_CACHE_PREFIX = 'stock_analysis_cache_v5_'; // Bump version to force new schema fetch
 const DASHBOARD_CACHE_DURATION = 15 * 60 * 1000; // 15 mins for market lists
 const ANALYSIS_CACHE_DURATION = 30 * 60 * 1000; // 30 mins for specific stock analysis
 
@@ -20,6 +21,16 @@ const stockPreviewSchema: Schema = {
     reason: { type: Type.STRING }
   },
   required: ["symbol", "name", "price", "changePercent", "reason"]
+};
+
+const timeframeStrategySchema: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    action: { type: Type.STRING, enum: ["BUY", "SELL", "HOLD", "OBSERVE"] },
+    priceTarget: { type: Type.STRING },
+    suggestion: { type: Type.STRING }
+  },
+  required: ["action", "priceTarget", "suggestion"]
 };
 
 const analysisSchema: Schema = {
@@ -55,9 +66,12 @@ const analysisSchema: Schema = {
         continuityScore: { type: Type.NUMBER },
         confidence: { type: Type.NUMBER },
         warningSignals: { type: Type.ARRAY, items: { type: Type.STRING } },
-        description: { type: Type.STRING }
+        description: { type: Type.STRING },
+        shortTermStrategy: timeframeStrategySchema,
+        mediumTermStrategy: timeframeStrategySchema,
+        longTermStrategy: timeframeStrategySchema
       },
-      required: ["phase", "leadingActor", "continuityScore", "confidence", "warningSignals", "description"]
+      required: ["phase", "leadingActor", "continuityScore", "confidence", "warningSignals", "description", "shortTermStrategy", "mediumTermStrategy", "longTermStrategy"]
     },
     marketSentiment: {
       type: Type.OBJECT,
@@ -155,6 +169,12 @@ export const analyzeStock = async (query: string, mode: 'flash' | 'pro' = 'flash
       - Acceleration: Strength of buying/selling change.
       - Divergence: Price vs Institutional flow consistency.
       - Identify the "Leading Actor" (Who is currently controlling the price?).
+      
+      STRATEGIC PLANNING (Based on Institutional Phase):
+      Provide distinct strategies for 3 timeframes:
+      1. Short-term (1-3 Days): Focus on momentum and immediate support/resistance.
+      2. Medium-term (1-3 Weeks): Focus on swing trade setups and institutional cost lines.
+      3. Long-term (1-3 Months): Focus on fundamental trend and major structural positions.
       
       Output must be in Traditional Chinese.
     `;

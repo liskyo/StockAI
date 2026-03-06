@@ -2,10 +2,12 @@ import React, { useState } from 'react';
 import { Search, BarChart3, Zap, BrainCircuit, Info, Gem } from 'lucide-react';
 import Dashboard from './components/Dashboard';
 import StockDetail from './components/StockDetail';
+import LandingPage from './components/LandingPage';
 import { analyzeStock } from './services/geminiService';
 import { AIAnalysisResult, AnalysisStatus, StockPreview } from './types';
 
 function App() {
+  const [showLanding, setShowLanding] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
   const [status, setStatus] = useState<AnalysisStatus>(AnalysisStatus.IDLE);
   const [analysisData, setAnalysisData] = useState<AIAnalysisResult | null>(null);
@@ -68,6 +70,18 @@ function App() {
     setSearchQuery('');
   };
 
+  const handleLogoClick = () => {
+    if (status === AnalysisStatus.IDLE) {
+      setShowLanding(true);
+    } else {
+      handleBack();
+    }
+  };
+
+  if (showLanding) {
+    return <LandingPage onEnter={() => setShowLanding(false)} />;
+  }
+
   return (
     <div className="min-h-screen bg-tech-dark text-slate-200 font-sans selection:bg-neon-blue selection:text-white">
       
@@ -75,7 +89,7 @@ function App() {
       <nav className="border-b border-slate-800 bg-slate-900/80 backdrop-blur-md sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16 gap-4">
-            <div className="flex items-center gap-2 cursor-pointer shrink-0" onClick={handleBack}>
+            <div className="flex items-center gap-2 cursor-pointer shrink-0" onClick={handleLogoClick}>
               <div className="bg-neon-blue p-1.5 rounded-lg">
                 <BarChart3 className="h-6 w-6 text-white" />
               </div>

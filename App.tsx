@@ -6,6 +6,15 @@ import LandingPage from './components/LandingPage';
 import { analyzeStock } from './services/geminiService';
 import { AIAnalysisResult, AnalysisStatus, StockPreview } from './types';
 
+declare global {
+  interface Window {
+    aistudio?: {
+      hasSelectedApiKey: () => Promise<boolean>;
+      openSelectKey: () => Promise<void>;
+    };
+  }
+}
+
 function App() {
   const [showLanding, setShowLanding] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
@@ -58,8 +67,13 @@ function App() {
       setAnalysisData(data);
       updateHistory(data);
       setStatus(AnalysisStatus.SUCCESS);
-    } catch (err) {
-      setErrorMsg("AI 分析失敗，請稍後重試。如果是 Pro 模式，可能需要較長的處理時間。");
+    } catch (err: any) {
+      console.error(err);
+      if (err.message && err.message.includes("Requested entity was not found")) {
+        setErrorMsg("API 金鑰無效或找不到專案。如果您使用的是 Pro 模式，請確保您已在 AI Studio 中選擇了有效的付費專案金鑰。");
+      } else {
+        setErrorMsg("AI 分析失敗，請稍後重試。如果是 Pro 模式，可能需要較長的處理時間。");
+      }
       setStatus(AnalysisStatus.ERROR);
     }
   };

@@ -2,9 +2,6 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
 import { AIAnalysisResult, DashboardData, Source, StockPreview } from "../types";
 
-const apiKey = process.env.API_KEY || '';
-const ai = new GoogleGenAI({ apiKey });
-
 const DASHBOARD_CACHE_KEY = 'stock_winner_dashboard_cache_v5';
 const ANALYSIS_CACHE_PREFIX = 'stock_analysis_cache_v5_'; // Bump version to force new schema fetch
 const DASHBOARD_CACHE_DURATION = 15 * 60 * 1000; // 15 mins for market lists
@@ -136,6 +133,14 @@ const strategiesSchema: Schema = {
 export const analyzeStock = async (query: string, mode: 'flash' | 'pro' = 'flash'): Promise<AIAnalysisResult> => {
   const symbol = query.trim().toUpperCase();
   const cacheKey = `${ANALYSIS_CACHE_PREFIX}${symbol}_${mode}`;
+  
+  // 核心破解：給一個假金鑰騙過前端 SDK 驗證，真正的金鑰會由 Cloud Run 後端 Proxy 注入
+  let currentApiKey = 'placeholder-key-for-proxy'; 
+  if (typeof process !== 'undefined' && process.env) {
+    // 確保即使找不到環境變數，也絕對不會回傳空字串
+    currentApiKey = process.env.API_KEY || process.env.GEMINI_API_KEY || 'placeholder-key-for-proxy';
+  }
+  const ai = new GoogleGenAI({ apiKey: currentApiKey });
 
   // 1. Check Cache (30 Minutes)
   try {
@@ -218,7 +223,7 @@ export const analyzeStock = async (query: string, mode: 'flash' | 'pro' = 'flash
     }
 
     const response = await ai.models.generateContent({
-      model: mode === 'pro' ? 'gemini-3-pro-preview' : 'gemini-3-flash-preview',
+      model: mode === 'pro' ? 'gemini-3.1-pro-preview' : 'gemini-3-flash-preview',
       contents: prompt,
       config: config
     });
@@ -250,6 +255,11 @@ export const analyzeStock = async (query: string, mode: 'flash' | 'pro' = 'flash
 };
 
 export const getDashboardData = async (): Promise<DashboardData> => {
+    let currentApiKey = 'placeholder-key-for-proxy'; 
+    if (typeof process !== 'undefined' && process.env) {
+      currentApiKey = process.env.API_KEY || process.env.GEMINI_API_KEY || 'placeholder-key-for-proxy';
+    }
+    const ai = new GoogleGenAI({ apiKey: currentApiKey });
     try {
         const cached = localStorage.getItem(DASHBOARD_CACHE_KEY);
         if (cached) {
